@@ -10,9 +10,6 @@ jobs:
       matrix:
         python-version: ["3.7", "3.8"]
         # python-version: ['3.7', '3.8', '3.9', '3.10', '3.11']
-    defaults:
-      run:
-        working-directory: ./src
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
@@ -23,26 +20,28 @@ jobs:
         with:
           targets: aarch64-apple-darwin
       - name: Build
+        working-directory: ./src
         run: cargo build --release
       - name: Tests
+        working-directory: ./src
         run: cargo test --no-default-features --release
       - name: Build wheels - x86_64
         uses: PyO3/maturin-action@v1
         with:
           target: x86_64
-          args: -i python --release --out dist --sdist -m src/core/Cargo.toml
+          args: -i python --release --out dist --sdist -m src/Cargo.toml
       - name: Install built wheel - x86_64
         run: |
-          pip install blobtoolkit-core --no-index --find-links ../dist --force-reinstall
+          pip install blobtoolkit-core --no-index --find-links ./dist --force-reinstall
       - name: Build wheels - universal2
         if: ${{ matrix.python-version >= '3.8' || contains(fromJson('["3.10", "3.11"]'), matrix.python-version) }}
         uses: PyO3/maturin-action@v1
         with:
-          args: -i python --release --universal2 --out dist -m src/core/Cargo.toml
+          args: -i python --release --universal2 --out dist -m src/Cargo.toml
       - name: Install built wheel - universal2
         if: ${{ matrix.python-version >= '3.8' || contains(fromJson('["3.10", "3.11"]'), matrix.python-version) }}
         run: |
-          pip install blobtoolkit-core --no-index --find-links ../dist --force-reinstall
+          pip install blobtoolkit-core --no-index --find-links ./dist --force-reinstall
       # - name: Python UnitTest
       #   run: |
       #     pip install -r dev-requirements.txt
@@ -51,7 +50,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: wheels
-          path: ../dist
+          path: dist
 
   # windows:
   #   runs-on: windows-latest
@@ -98,21 +97,21 @@ jobs:
         python-version: ["3.9", "3.10"]
         # python-version: ['3.7', '3.8', '3.9', '3.10', '3.11']
         target: [x86_64, i686]
-    defaults:
-      run:
-        working-directory: ./src
     steps:
       - uses: actions/checkout@v3
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Build
+        working-directory: ./src
         run: cargo build --release
       - name: Tests
+        working-directory: ./src
         run: cargo test --no-default-features --release
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
       - name: Audit
+        working-directory: ./src
         run: cargo install cargo-audit && cargo audit
       - name: Build Wheels
         uses: PyO3/maturin-action@v1
@@ -123,7 +122,7 @@ jobs:
       - name: Python UnitTest
         if: matrix.target == 'x86_64'
         run: |
-          pip install blobtoolkit-core --no-index --find-links ../dist --force-reinstall
+          pip install blobtoolkit-core --no-index --find-links ./dist --force-reinstall
       #     pip install -r dev-requirements.txt
       #     make test
       # - name: Test no numpy installed works
@@ -135,7 +134,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: wheels
-          path: ../dist
+          path: dist
 
   # release:
   #   name: Release
