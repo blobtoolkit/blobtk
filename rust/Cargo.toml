@@ -8,6 +8,12 @@ name = "blobtoolkit_core"
 path = "src/lib.rs"
 crate-type = ["cdylib", "lib"]
 
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
+
 [dependencies]
 atty = "0.2.14"
 clap = { version = "4.0.29", features = [ "derive" ]}
