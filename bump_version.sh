@@ -16,6 +16,11 @@ cd rust &&
 
 cargo bump $LEVEL &&
 
+while [ $? == 0 ]; do
+  sleep 2;
+  git diff --exit-code --name-only Cargo.lock
+done;
+
 cd - &&
 
 git add --all
