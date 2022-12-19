@@ -7,7 +7,7 @@ if [ -z "$LEVEL" ]; then
   exit 1;
 fi
 
-if [ ! -z "$(git status --porcelain)" ]; then 
+if [ ! -z "$(git status --porcelain)" ]; then
   echo "Commit changes before running this script"
   exit 1;
 fi
@@ -18,6 +18,6 @@ cargo bump $LEVEL &&
 
 cd - &&
 
-git commit -a
+git add --all
 
 bump2version $LEVEL --allow-dirty
