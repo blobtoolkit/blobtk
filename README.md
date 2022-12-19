@@ -1,4 +1,4 @@
-# BlobToolKit Core (v0.0.9)
+# BlobToolKit Core (v0.1.0)
 
 ## About
 
