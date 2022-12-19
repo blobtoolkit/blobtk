@@ -18,7 +18,7 @@ pub enum SubCommand {
 #[derive(Parser, Debug)]
 #[command(group(
     ArgGroup::new("alignment")
-        .required(true)
+        .required(false)
         .args(["bam", "cram"]),
 ))]
 pub struct FilterOptions {

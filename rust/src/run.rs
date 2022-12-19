@@ -17,6 +17,9 @@ pub fn filter(options: &cli::FilterOptions) -> Result<(), Box<dyn Error>> {
         &options.fasta_out,
         &options.suffix,
     );
+    if options.bam == None && options.cram == None {
+        return Ok(());
+    }
     let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta);
     let read_names = bam::reads_from_bam(&seq_names, bam);
     io::write_list(&read_names, &options.read_list)?;
