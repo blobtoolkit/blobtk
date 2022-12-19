@@ -20,16 +20,16 @@ jobs:
         with:
           targets: aarch64-apple-darwin
       - name: Build
-        working-directory: ./src
+        working-directory: ./rust
         run: cargo build --release
       - name: Tests
-        working-directory: ./src
+        working-directory: ./rust
         run: cargo test --no-default-features --release
       - name: Build wheels - x86_64
         uses: PyO3/maturin-action@v1
         with:
           target: x86_64
-          args: -i python --release --out dist --sdist -m src/Cargo.toml
+          args: -i python --release --out dist --sdist -m rust/Cargo.toml
       - name: Install built wheel - x86_64
         run: |
           pip install blobtoolkit-core --no-index --find-links ./dist --force-reinstall
@@ -37,7 +37,7 @@ jobs:
         if: ${{ matrix.python-version >= '3.8' || contains(fromJson('["3.10", "3.11"]'), matrix.python-version) }}
         uses: PyO3/maturin-action@v1
         with:
-          args: -i python --release --universal2 --out dist -m src/Cargo.toml
+          args: -i python --release --universal2 --out dist -m rust/Cargo.toml
       - name: Install built wheel - universal2
         if: ${{ matrix.python-version >= '3.8' || contains(fromJson('["3.10", "3.11"]'), matrix.python-version) }}
         run: |
@@ -46,6 +46,14 @@ jobs:
       #   run: |
       #     pip install -r dev-requirements.txt
       #     make test
+      - name: Rename binary
+        run: |
+          mv ./rust/target/release/blobtoolkit-core ./rust/target/release/blobtoolkit-core-macos
+      - name: Upload binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: rust/target/release/blobtoolkit-core
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
@@ -102,23 +110,23 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Build
-        working-directory: ./src
+        working-directory: ./rust
         run: cargo build --release
       - name: Tests
-        working-directory: ./src
+        working-directory: ./rust
         run: cargo test --no-default-features --release
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
       - name: Audit
-        working-directory: ./src
+        working-directory: ./rust
         run: cargo install cargo-audit && cargo audit
       - name: Build Wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
           manylinux: auto
-          args: -i ${{ matrix.python-version }} --release --out dist -m src/Cargo.toml
+          args: -i ${{ matrix.python-version }} --release --out dist -m rust/Cargo.toml
       - name: Python UnitTest
         if: matrix.target == 'x86_64'
         run: |
@@ -130,6 +138,14 @@ jobs:
       #   run: |
       #     pip uninstall numpy -y
       #     python -m pytest tests/test_no_numpy.py
+      - name: Rename binary
+        run: |
+          mv ./rust/target/release/blobtoolkit-core ./rust/target/release/blobtoolkit-core-linux
+      - name: Upload binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: rust/target/release/blobtoolkit-core
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
