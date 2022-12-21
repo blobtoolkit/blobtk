@@ -84,6 +84,9 @@ fn fastx_with_options(options: &FilterOptions) -> PyResult<usize> {
         &options.fasta_out,
         &options.suffix,
     );
+    if options.bam == None && options.cram == None {
+        return Ok(0);
+    }
     let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta);
     let read_names = bam::reads_from_bam(&seq_names, bam);
     io::write_list(&read_names, &options.read_list)?;

@@ -33,8 +33,18 @@ pub fn filter(options: &cli::FilterOptions) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+pub fn depth(options: &cli::DepthOptions) -> Result<(), Box<dyn Error>> {
+    let seq_names = io::get_list(&options.list_file);
+    let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta);
+    bam::get_depth(bam, &seq_names, &options.bin_size);
+
+    println!("{:#?}", options);
+    Ok(())
+}
+
 pub fn cmd(args: cli::Arguments) -> Result<(), Box<dyn Error>> {
     match args.cmd {
         cli::SubCommand::Filter(options) => filter(&options),
+        cli::SubCommand::Depth(options) => depth(&options),
     }
 }

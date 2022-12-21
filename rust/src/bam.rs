@@ -1,7 +1,8 @@
+use crate::run::depth;
 use crate::utils::styled_progress_bar;
-use rust_htslib::bam::{index, IndexedReader, Read};
+use rust_htslib::bam::{index, Header, IndexedReader, Read};
 use rust_htslib::htslib;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 fn add_extension(path: &mut PathBuf, extension: impl AsRef<Path>) {
@@ -83,4 +84,68 @@ pub fn reads_from_bam(seq_names: &HashSet<Vec<u8>>, mut bam: IndexedReader) -> H
     }
     progress_bar.finish();
     wanted_reads
+}
+
+fn seq_lengths_from_header(
+    bam: &IndexedReader,
+    seq_names: &HashSet<Vec<u8>>,
+) -> HashMap<String, u64> {
+    let header = Header::from_template(bam.header());
+    let mut seq_lengths: HashMap<String, u64> = HashMap::new();
+    for (_, records) in header.to_hashmap() {
+        for record in records {
+            if record.contains_key("SN") {
+                if seq_names.len() > 0 && !seq_names.contains(&record["SN"].as_bytes().to_vec()) {
+                    continue;
+                }
+                seq_lengths
+                    .entry(record["SN"].to_string())
+                    .or_insert(record["LN"].parse::<u64>().unwrap());
+            }
+        }
+    }
+    seq_lengths
+}
+
+pub fn depth_from_bam(
+    seq_lengths: &HashMap<String, u64>,
+    mut bam: IndexedReader,
+    bin_size: &u32,
+) -> () {
+    let total = seq_lengths.len() as u64;
+    let progress_bar = styled_progress_bar(total, "Locating alignments");
+    let step = *bin_size as usize;
+    for (seq_name, length) in seq_lengths {
+        match bam.fetch(seq_name) {
+            Err(_) => eprintln!("Sequence {:?} not found in BAM file", seq_name),
+            Ok(_) => (),
+        }
+        let mut binned_cov: Vec<u64> = vec![];
+        for _ in (0..*length).step_by(step) {
+            binned_cov.push(0)
+        }
+
+        for p in bam.pileup() {
+            let pileup = p.unwrap();
+            let bin = pileup.pos() as usize / step;
+            binned_cov[bin] += 1;
+        }
+
+        println!("{:?}", binned_cov);
+        progress_bar.inc(1);
+        break;
+    }
+    progress_bar.finish();
+}
+
+pub fn get_depth(bam: IndexedReader, seq_names: &HashSet<Vec<u8>>, bin_size: &u32) -> () {
+    let seq_lengths = seq_lengths_from_header(&bam, &seq_names);
+    depth_from_bam(&seq_lengths, bam, bin_size);
+    // let mut seq_names = names_list;
+    // let alt_names: HashSet<Vec<u8>>;
+    // if names_list.len() == 0 {
+    //     alt_names = seq_names_from_header(&bam);
+    //     seq_names = &alt_names;
+    // }
+    println!("{:?}", seq_lengths);
 }
