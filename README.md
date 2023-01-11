@@ -1,4 +1,4 @@
-# BlobToolKit Core (v0.1.1)
+# BlobToolKit Core (v0.1.2)
 
 ## About
 
@@ -13,14 +13,14 @@ The command line tool is available as a linux/macos binary from the latest relea
 linux:
 
 ```
-curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.1.1/blobtoolkit-core-linux" > blobtoolkit-core &&
+curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.1.2/blobtoolkit-core-linux" > blobtoolkit-core &&
 chmod 755 blobtoolkit-core
 ```
 
 macos:
 
 ```
-curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.1.1/blobtoolkit-core-macos" > blobtoolkit-core &&
+curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.1.2/blobtoolkit-core-macos" > blobtoolkit-core &&
 chmod 755 blobtoolkit-core
 ```
 
