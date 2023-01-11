@@ -111,41 +111,75 @@ pub fn depth_from_bam(
     seq_lengths: &HashMap<String, u64>,
     mut bam: IndexedReader,
     bin_size: &u32,
-) -> () {
+) -> Vec<Vec<u64>> {
     let total = seq_lengths.len() as u64;
     let progress_bar = styled_progress_bar(total, "Locating alignments");
     let step = *bin_size as usize;
+    let mut binned_covs: Vec<Vec<u64>> = vec![];
     for (seq_name, length) in seq_lengths {
-        match bam.fetch(seq_name) {
+        let mut binned_cov: Vec<u64> = vec![];
+        // for _ in (0..*length).step_by(step) {
+        //     binned_cov.push(0)
+        // }
+        for _ in (0..1000000).step_by(step) {
+            binned_cov.push(0)
+        }
+        let mut owned_string: String = seq_name.to_owned();
+        let borrowed_string: &str = ":1-1000000";
+
+        owned_string.push_str(borrowed_string);
+        println!("{}", owned_string);
+        match bam.fetch(&owned_string) {
             Err(_) => eprintln!("Sequence {:?} not found in BAM file", seq_name),
             Ok(_) => (),
         }
-        let mut binned_cov: Vec<u64> = vec![];
-        for _ in (0..*length).step_by(step) {
-            binned_cov.push(0)
-        }
+        // let mut read_count: u32 = 0;
+        // for read in bam
+        //     .rc_records()
+        //     .map(|x| x.expect("Failure parsing Bam file"))
+        //     // TODO: include filter options in config
+        //     .filter(|read| {
+        //         read.flags()
+        //             & (htslib::BAM_FUNMAP
+        //                 | htslib::BAM_FSECONDARY
+        //                 | htslib::BAM_FQCFAIL
+        //                 | htslib::BAM_FDUP) as u16
+        //             == 0
+        //     })
+        // {
+        //     println!(
+        //         "Read {:?}, length = {:?}, at {:?}, cigar {:?}",
+        //         String::from_utf8(read.qname().to_vec()).unwrap(),
+        //         read.seq_len(),
+        //         read.pos(),
+        //         read.cigar().to_string()
+        //     );
+        //     read_count += 1;
+        // }
+        // println!("Read count = {:?}", read_count);
 
         for p in bam.pileup() {
             let pileup = p.unwrap();
             let bin = pileup.pos() as usize / step;
-            binned_cov[bin] += 1;
+            binned_cov[bin] += pileup.depth() as u64;
         }
 
-        println!("{:?}", binned_cov);
+        binned_covs.push(binned_cov);
         progress_bar.inc(1);
-        break;
+        // break;
     }
     progress_bar.finish();
+    binned_covs
 }
 
 pub fn get_depth(bam: IndexedReader, seq_names: &HashSet<Vec<u8>>, bin_size: &u32) -> () {
     let seq_lengths = seq_lengths_from_header(&bam, &seq_names);
-    depth_from_bam(&seq_lengths, bam, bin_size);
+    let binned_covs = depth_from_bam(&seq_lengths, bam, bin_size);
     // let mut seq_names = names_list;
     // let alt_names: HashSet<Vec<u8>>;
     // if names_list.len() == 0 {
     //     alt_names = seq_names_from_header(&bam);
     //     seq_names = &alt_names;
     // }
-    println!("{:?}", seq_lengths);
+    println!("{:?}", binned_covs);
 }
