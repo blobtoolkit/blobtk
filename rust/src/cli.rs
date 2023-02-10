@@ -119,9 +119,9 @@ pub struct DepthOptions {
     /// Window size for coverage calculations size
     #[arg(long = "window-size", short = 'w', num_args(1..), default_values_t = [1.0], value_parser = window_size_range, action = clap::ArgAction::Append)]
     pub window_size: Vec<f64>,
-    /// Path to output directory for coverage files
-    #[arg(long = "output", short = 'O', value_name = "TXT")]
-    pub output_dir: Option<PathBuf>,
+    /// Output bed file name
+    #[arg(long = "output", short = 'O', value_name = "BED")]
+    pub output: Option<PathBuf>,
 }
 
 pub fn parse() -> Arguments {

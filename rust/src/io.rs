@@ -9,6 +9,8 @@ use flate2::write;
 use flate2::Compression;
 use std::ffi::OsStr;
 
+use crate::bam::BinnedCov;
+
 fn read_stdin() -> Vec<Vec<u8>> {
     let stdin = io::stdin();
     let mut list: Vec<Vec<u8>> = vec![];
@@ -99,4 +101,31 @@ pub fn get_writer(file_path: PathBuf) -> Box<dyn Write> {
         Box::new(BufWriter::with_capacity(128 * 1024, file))
     };
     writer
+}
+
+fn write_file_string(entries: &Vec<String>, file_path: &PathBuf) -> Result<()> {
+    let mut w = File::create(file_path).unwrap();
+    for line in entries.into_iter() {
+        writeln!(&mut w, "{}", line).unwrap();
+    }
+    Ok(())
+}
+
+fn write_stdout_string(entries: &Vec<String>) -> Result<()> {
+    let stdout = io::stdout();
+    let lock = stdout.lock();
+    let mut w = BufWriter::new(lock);
+    for line in entries.into_iter() {
+        writeln!(&mut w, "{}", line).unwrap();
+    }
+    Ok(())
+}
+
+pub fn write_bed_file(entries: &Vec<String>, file_path: &Option<PathBuf>) -> Result<()> {
+    match &file_path {
+        None => return Ok(()),
+        &Some(p) if p == Path::new("-") => write_stdout_string(&entries),
+        &Some(_) => write_file_string(&entries, file_path.as_ref().unwrap()),
+    }?;
+    Ok(())
 }

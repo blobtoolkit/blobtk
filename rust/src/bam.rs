@@ -1,4 +1,3 @@
-use crate::run::depth;
 use crate::utils::styled_progress_bar;
 use rust_htslib::bam::{index, Header, IndexedReader, Read};
 use rust_htslib::htslib;
@@ -107,29 +106,60 @@ fn seq_lengths_from_header(
     seq_lengths
 }
 
+#[derive(Clone, Debug)]
+pub struct BinnedCov {
+    seq_name: String,
+    bins: Vec<f64>,
+    bin_count: usize,
+    last_bin: usize,
+    seq_length: usize,
+    step: usize,
+}
+
+impl BinnedCov {
+    pub fn seq_name(self) -> String {
+        self.seq_name
+    }
+    pub fn bins(self) -> Vec<f64> {
+        self.bins
+    }
+    pub fn bin_count(self) -> usize {
+        self.bin_count
+    }
+    pub fn seq_length(self) -> usize {
+        self.seq_length
+    }
+    pub fn last_bin(self) -> usize {
+        self.last_bin
+    }
+    pub fn step(self) -> usize {
+        self.step
+    }
+}
+
 pub fn depth_from_bam(
     seq_lengths: &HashMap<String, u64>,
     mut bam: IndexedReader,
     bin_size: &u32,
-) -> Vec<Vec<u64>> {
+) -> Vec<BinnedCov> {
     let total = seq_lengths.len() as u64;
     let progress_bar = styled_progress_bar(total, "Locating alignments");
     let step = *bin_size as usize;
-    let mut binned_covs: Vec<Vec<u64>> = vec![];
+    let mut binned_covs: Vec<BinnedCov> = vec![];
     for (seq_name, length) in seq_lengths {
         let mut binned_cov: Vec<u64> = vec![];
-        // for _ in (0..*length).step_by(step) {
-        //     binned_cov.push(0)
-        // }
-        for _ in (0..1000000).step_by(step) {
+        for _ in (0..*length).step_by(step) {
             binned_cov.push(0)
         }
-        let mut owned_string: String = seq_name.to_owned();
-        let borrowed_string: &str = ":1-1000000";
+        // for _ in (0..1000000).step_by(step) {
+        //     binned_cov.push(0)
+        // }
+        // let mut owned_string: String = seq_name.to_owned();
+        // let borrowed_string: &str = ":1-1000000";
 
-        owned_string.push_str(borrowed_string);
-        println!("{}", owned_string);
-        match bam.fetch(&owned_string) {
+        // owned_string.push_str(borrowed_string);
+        // println!("{}", owned_string);
+        match bam.fetch(&seq_name) {
             Err(_) => eprintln!("Sequence {:?} not found in BAM file", seq_name),
             Ok(_) => (),
         }
@@ -164,7 +194,25 @@ pub fn depth_from_bam(
             binned_cov[bin] += pileup.depth() as u64;
         }
 
-        binned_covs.push(binned_cov);
+        let mut prop_cov: Vec<f64> = vec![];
+        let mut divisor = step;
+        let mut end: usize = 0;
+        let seq_length = length.to_owned() as usize;
+        for cov in binned_cov {
+            end += step;
+            if end > seq_length {
+                divisor -= end - seq_length;
+            }
+            prop_cov.push(cov as f64 / divisor as f64);
+        }
+        binned_covs.push(BinnedCov {
+            seq_name: seq_name.to_owned(),
+            step,
+            bin_count: prop_cov.len(),
+            bins: prop_cov,
+            seq_length,
+            last_bin: divisor,
+        });
         progress_bar.inc(1);
         // break;
     }
@@ -172,14 +220,35 @@ pub fn depth_from_bam(
     binned_covs
 }
 
-pub fn get_depth(bam: IndexedReader, seq_names: &HashSet<Vec<u8>>, bin_size: &u32) -> () {
+pub fn get_depth(
+    bam: IndexedReader,
+    seq_names: &HashSet<Vec<u8>>,
+    bin_size: &u32,
+) -> Vec<BinnedCov> {
     let seq_lengths = seq_lengths_from_header(&bam, &seq_names);
     let binned_covs = depth_from_bam(&seq_lengths, bam, bin_size);
-    // let mut seq_names = names_list;
-    // let alt_names: HashSet<Vec<u8>>;
-    // if names_list.len() == 0 {
-    //     alt_names = seq_names_from_header(&bam);
-    //     seq_names = &alt_names;
-    // }
-    println!("{:?}", binned_covs);
+    binned_covs
+}
+
+pub fn binned_cov_to_bed(binned_covs: Vec<BinnedCov>) -> Vec<String> {
+    let mut lines: Vec<String> = vec![];
+    for binned_cov in binned_covs {
+        let mut start = 0;
+        let mut end;
+        let bin_count = binned_cov.clone().bin_count();
+        let seq_length = binned_cov.clone().seq_length();
+        let seq_name = binned_cov.clone().seq_name();
+        let step = binned_cov.clone().step();
+        let bins = binned_cov.clone().bins();
+        for i in 0..bin_count {
+            end = start + step;
+            if end > seq_length {
+                end = seq_length;
+            }
+            let line = format!("{}\t{}\t{}\t{:.3}", seq_name, start, end, bins[i]);
+            lines.push(line);
+            start = end;
+        }
+    }
+    lines
 }

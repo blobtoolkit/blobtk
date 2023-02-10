@@ -36,9 +36,9 @@ pub fn filter(options: &cli::FilterOptions) -> Result<(), Box<dyn Error>> {
 pub fn depth(options: &cli::DepthOptions) -> Result<(), Box<dyn Error>> {
     let seq_names = io::get_list(&options.list_file);
     let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta);
-    bam::get_depth(bam, &seq_names, &options.bin_size);
-
-    println!("{:#?}", options);
+    let binned_covs = bam::get_depth(bam, &seq_names, &options.bin_size);
+    let entries = bam::binned_cov_to_bed(binned_covs);
+    io::write_bed_file(&entries, &options.output)?;
     Ok(())
 }
 
