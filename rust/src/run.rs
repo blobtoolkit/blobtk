@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::io::ErrorKind;
 
 use crate::bam;
 use crate::cli;
@@ -22,7 +23,6 @@ pub fn filter(options: &cli::FilterOptions) -> Result<(), Box<dyn Error>> {
     }
     let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta, true);
     let read_names = bam::reads_from_bam(&seq_names, bam);
-    io::write_list(&read_names, &options.read_list)?;
     fastq::subsample(
         &read_names,
         &options.fastq1,
@@ -30,6 +30,11 @@ pub fn filter(options: &cli::FilterOptions) -> Result<(), Box<dyn Error>> {
         &options.fastq_out,
         &options.suffix,
     );
+    match io::write_list(&read_names, &options.read_list) {
+        Err(err) if err.kind() == ErrorKind::BrokenPipe => return Ok(()),
+        Err(err) => panic!("unable to write read list file: {}", err),
+        Ok(_) => (),
+    };
     Ok(())
 }
 

@@ -48,24 +48,6 @@ fn read_file(file_path: &PathBuf) -> Vec<Vec<u8>> {
     output
 }
 
-fn write_stdout(entries: &HashSet<Vec<u8>>) -> Result<()> {
-    let stdout = io::stdout();
-    let lock = stdout.lock();
-    let mut w = BufWriter::new(lock);
-    for line in entries.into_iter() {
-        writeln!(&mut w, "{}", String::from_utf8(line.to_vec()).unwrap()).unwrap();
-    }
-    Ok(())
-}
-
-fn write_file(entries: &HashSet<Vec<u8>>, file_path: &PathBuf) -> Result<()> {
-    let mut w = File::create(file_path).unwrap();
-    for line in entries.into_iter() {
-        writeln!(&mut w, "{}", String::from_utf8(line.to_vec()).unwrap()).unwrap();
-    }
-    Ok(())
-}
-
 pub fn get_list(file_path: &Option<PathBuf>) -> HashSet<Vec<u8>> {
     let list = match file_path {
         None => vec![],
@@ -73,15 +55,6 @@ pub fn get_list(file_path: &Option<PathBuf>) -> HashSet<Vec<u8>> {
         Some(_) => read_file(file_path.as_ref().unwrap()),
     };
     HashSet::from_iter(list)
-}
-
-pub fn write_list(entries: &HashSet<Vec<u8>>, file_path: &Option<PathBuf>) -> Result<()> {
-    match &file_path {
-        None => return Ok(()),
-        &Some(p) if p == Path::new("-") => write_stdout(&entries),
-        &Some(_) => write_file(&entries, file_path.as_ref().unwrap()),
-    }?;
-    Ok(())
 }
 
 pub fn get_file_writer(file_path: &PathBuf) -> Box<dyn Write> {
@@ -109,4 +82,15 @@ pub fn get_writer(file_path: &Option<PathBuf>) -> Box<dyn Write> {
         None => Box::new(BufWriter::new(io::stdout().lock())),
     };
     writer
+}
+
+pub fn write_list(entries: &HashSet<Vec<u8>>, file_path: &Option<PathBuf>) -> Result<()> {
+    let mut writer = get_writer(file_path);
+    for line in entries.into_iter() {
+        match writeln!(&mut writer, "{}", String::from_utf8(line.to_vec()).unwrap()) {
+            Err(err) => return Err(err),
+            Ok(_) => (),
+        };
+    }
+    Ok(())
 }
