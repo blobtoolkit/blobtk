@@ -1,7 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
+use std::ops::Index;
 use std::path::{Path, PathBuf};
 
+use indexmap::IndexMap;
 use rust_htslib::bam::{index, Header, IndexedReader, Read};
 use rust_htslib::htslib;
 
@@ -90,9 +92,9 @@ pub fn reads_from_bam(seq_names: &HashSet<Vec<u8>>, mut bam: IndexedReader) -> H
 fn seq_lengths_from_header(
     bam: &IndexedReader,
     seq_names: &HashSet<Vec<u8>>,
-) -> HashMap<String, u64> {
+) -> IndexMap<String, u64> {
     let header = Header::from_template(bam.header());
-    let mut seq_lengths: HashMap<String, u64> = HashMap::new();
+    let mut seq_lengths: IndexMap<String, u64> = IndexMap::new();
     for (_, records) in header.to_hashmap() {
         for record in records {
             if record.contains_key("SN") {
@@ -177,7 +179,7 @@ fn depth_to_bed(
         if end > seq_length {
             end = seq_length;
         }
-        let line = format!("{}\t{}\t{}\t{:.3}", seq_name, start, end, bins[i]);
+        let line = format!("{}\t{}\t{}\t{:.2}", seq_name, start, end, bins[i]);
         writeln!(writer, "{}", line).unwrap();
         start = end;
     }
@@ -185,7 +187,7 @@ fn depth_to_bed(
 }
 
 pub fn depth_from_bam(
-    seq_lengths: &HashMap<String, u64>,
+    seq_lengths: &IndexMap<String, u64>,
     mut bam: IndexedReader,
     options: &DepthOptions,
 ) -> Vec<BinnedCov> {
@@ -225,27 +227,4 @@ pub fn get_depth(
     let seq_lengths = seq_lengths_from_header(&bam, &seq_names);
     let binned_covs = depth_from_bam(&seq_lengths, bam, options);
     binned_covs
-}
-
-pub fn binned_cov_to_bed(binned_covs: Vec<BinnedCov>) -> Vec<String> {
-    let mut lines: Vec<String> = vec![];
-    for binned_cov in binned_covs {
-        let mut start = 0;
-        let mut end;
-        let bin_count = binned_cov.clone().bin_count();
-        let seq_length = binned_cov.clone().seq_length();
-        let seq_name = binned_cov.clone().seq_name();
-        let step = binned_cov.clone().step();
-        let bins = binned_cov.clone().bins();
-        for i in 0..bin_count {
-            end = start + step;
-            if end > seq_length {
-                end = seq_length;
-            }
-            let line = format!("{}\t{}\t{}\t{:.3}", seq_name, start, end, bins[i]);
-            lines.push(line);
-            start = end;
-        }
-    }
-    lines
 }
