@@ -1,6 +1,6 @@
 extern crate atty;
 use std::collections::HashSet;
-use std::io::{self, BufRead, BufWriter, Result, Write};
+use std::io::{self, BufRead, BufWriter, Result, StdoutLock, Write};
 use std::path::{Path, PathBuf};
 
 use std::fs::File;
@@ -8,8 +8,6 @@ use std::fs::File;
 use flate2::write;
 use flate2::Compression;
 use std::ffi::OsStr;
-
-use crate::bam::BinnedCov;
 
 fn read_stdin() -> Vec<Vec<u8>> {
     let stdin = io::stdin();
@@ -70,8 +68,9 @@ fn write_file(entries: &HashSet<Vec<u8>>, file_path: &PathBuf) -> Result<()> {
 
 pub fn get_list(file_path: &Option<PathBuf>) -> HashSet<Vec<u8>> {
     let list = match file_path {
-        None => read_stdin(),
-        &Some(_) => read_file(file_path.as_ref().unwrap()),
+        None => vec![],
+        Some(p) if p == Path::new("-") => read_stdin(),
+        Some(_) => read_file(file_path.as_ref().unwrap()),
     };
     HashSet::from_iter(list)
 }
@@ -85,7 +84,7 @@ pub fn write_list(entries: &HashSet<Vec<u8>>, file_path: &Option<PathBuf>) -> Re
     Ok(())
 }
 
-pub fn get_writer(file_path: PathBuf) -> Box<dyn Write> {
+pub fn get_file_writer(file_path: &PathBuf) -> Box<dyn Write> {
     let file = match File::create(&file_path) {
         Err(why) => panic!("couldn't open {}: {}", file_path.display(), why),
         Ok(file) => file,
@@ -99,6 +98,15 @@ pub fn get_writer(file_path: PathBuf) -> Box<dyn Write> {
         ))
     } else {
         Box::new(BufWriter::with_capacity(128 * 1024, file))
+    };
+    writer
+}
+
+pub fn get_writer(file_path: &Option<PathBuf>) -> Box<dyn Write> {
+    let writer: Box<dyn Write> = match file_path {
+        Some(path) if path == Path::new("-") => Box::new(BufWriter::new(io::stdout().lock())),
+        Some(path) => get_file_writer(path),
+        None => Box::new(BufWriter::new(io::stdout().lock())),
     };
     writer
 }

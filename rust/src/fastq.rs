@@ -163,10 +163,10 @@ pub fn subsample(
     let paired_reader = open_fastx(fastq_path_2);
     let read_suffix = set_read_suffix(read_names);
     let out_path = suffix_file_name(fastq_path_1.as_ref().unwrap(), &suffix);
-    let mut writer = get_writer(out_path);
+    let mut writer = get_writer(&Some(out_path));
     if let Some(_) = paired_reader {
         let paired_out_path = suffix_file_name(fastq_path_2.as_ref().unwrap(), &suffix);
-        let mut paired_writer = get_writer(paired_out_path);
+        let mut paired_writer = get_writer(&Some(paired_out_path));
         subsample_paired(
             read_names,
             reader.unwrap(),

@@ -56,7 +56,7 @@ pub fn subsample(
     }
     let reader = open_fastx(fasta_path);
     let out_path = suffix_file_name(fasta_path.as_ref().unwrap(), &suffix);
-    let mut writer = get_writer(out_path);
+    let mut writer = get_writer(&Some(out_path));
     if let Some(_) = reader {
         subsample_fasta(seq_names, reader.unwrap(), &mut *writer);
     }

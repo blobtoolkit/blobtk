@@ -20,7 +20,7 @@ pub fn filter(options: &cli::FilterOptions) -> Result<(), Box<dyn Error>> {
     if options.bam == None && options.cram == None {
         return Ok(());
     }
-    let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta);
+    let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta, true);
     let read_names = bam::reads_from_bam(&seq_names, bam);
     io::write_list(&read_names, &options.read_list)?;
     fastq::subsample(
@@ -35,10 +35,8 @@ pub fn filter(options: &cli::FilterOptions) -> Result<(), Box<dyn Error>> {
 
 pub fn depth(options: &cli::DepthOptions) -> Result<(), Box<dyn Error>> {
     let seq_names = io::get_list(&options.list_file);
-    let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta);
-    let binned_covs = bam::get_depth(bam, &seq_names, &options.bin_size);
-    let entries = bam::binned_cov_to_bed(binned_covs);
-    io::write_bed_file(&entries, &options.output)?;
+    let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta, true);
+    bam::get_depth(bam, &seq_names, &options);
     Ok(())
 }
 
