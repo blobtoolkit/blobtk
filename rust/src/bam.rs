@@ -59,7 +59,7 @@ pub fn open_bam(
 
 pub fn reads_from_bam(seq_names: &HashSet<Vec<u8>>, mut bam: IndexedReader) -> HashSet<Vec<u8>> {
     let mut wanted_reads = HashSet::new();
-    let total = seq_names.len() as u64;
+    let total = seq_names.len();
     let progress_bar = styled_progress_bar(total, "Locating alignments");
 
     for seq_name in seq_names {
@@ -92,9 +92,9 @@ pub fn reads_from_bam(seq_names: &HashSet<Vec<u8>>, mut bam: IndexedReader) -> H
 fn seq_lengths_from_header(
     bam: &IndexedReader,
     seq_names: &HashSet<Vec<u8>>,
-) -> IndexMap<String, u64> {
+) -> IndexMap<String, usize> {
     let header = Header::from_template(bam.header());
-    let mut seq_lengths: IndexMap<String, u64> = IndexMap::new();
+    let mut seq_lengths: IndexMap<String, usize> = IndexMap::new();
     for (_, records) in header.to_hashmap() {
         for record in records {
             if record.contains_key("SN") {
@@ -103,7 +103,7 @@ fn seq_lengths_from_header(
                 }
                 seq_lengths
                     .entry(record["SN"].to_string())
-                    .or_insert(record["LN"].parse::<u64>().unwrap());
+                    .or_insert(record["LN"].parse::<usize>().unwrap());
             }
         }
     }
@@ -142,8 +142,8 @@ fn seq_lengths_from_header(
 // }
 
 fn depth_to_bed(
-    raw_cov: Vec<u64>,
-    length: &u64,
+    raw_cov: Vec<usize>,
+    length: &usize,
     step: usize,
     seq_name: &String,
     writer: &mut Box<dyn Write>,
@@ -151,7 +151,7 @@ fn depth_to_bed(
     let mut bins: Vec<f64> = vec![];
     let mut divisor = step;
     let mut end: usize = 0;
-    let seq_length = length.to_owned() as usize;
+    let seq_length = length.to_owned();
     for cov in raw_cov {
         end += step;
         if end > seq_length {
@@ -186,17 +186,17 @@ fn depth_to_bed(
 }
 
 pub fn depth_from_bam(
-    seq_lengths: &IndexMap<String, u64>,
+    seq_lengths: &IndexMap<String, usize>,
     mut bam: IndexedReader,
     options: &DepthOptions,
 ) -> () {
-    let total = seq_lengths.len() as u64;
+    let total = seq_lengths.len();
     let progress_bar = styled_progress_bar(total, "Locating alignments");
     let bin_size = options.bin_size;
-    let step = bin_size as usize;
+    let step = bin_size;
     let mut writer = get_writer(&options.output);
     for (seq_name, length) in seq_lengths.clone() {
-        let mut raw_cov: Vec<u64> = vec![];
+        let mut raw_cov: Vec<usize> = vec![];
         for _ in (0..length).step_by(step) {
             raw_cov.push(0)
         }
@@ -207,7 +207,7 @@ pub fn depth_from_bam(
         for p in bam.pileup() {
             let pileup = p.unwrap();
             let bin = pileup.pos() as usize / step;
-            raw_cov[bin] += pileup.depth() as u64;
+            raw_cov[bin] += pileup.depth() as usize;
         }
         match depth_to_bed(raw_cov, &length, step, &seq_name, &mut writer) {
             Err(err) if err.kind() == ErrorKind::BrokenPipe => return,

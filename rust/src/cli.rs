@@ -115,7 +115,7 @@ pub struct DepthOptions {
     pub fasta: Option<PathBuf>,
     /// Bin size for coverage calculations (use 0 for full contig length)
     #[arg(long = "bin-size", short = 's', default_value_t = 1000)]
-    pub bin_size: u64,
+    pub bin_size: usize,
     // /// Window size for coverage calculations size
     // #[arg(long = "window-size", short = 'w', num_args(1..), default_values_t = [1.0], value_parser = window_size_range, action = clap::ArgAction::Append)]
     // pub window_size: Vec<f64>,

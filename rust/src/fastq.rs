@@ -34,7 +34,7 @@ fn subsample_paired(
     paired_writer: &mut dyn Write,
     read_suffix: &[Vec<u8>; 2],
 ) {
-    let total = read_names.len() as u64;
+    let total = read_names.len();
     let progress_bar = styled_progress_bar(total, "Subsampling FASTQ");
 
     while let Some(record) = reader.next() {
@@ -70,7 +70,7 @@ fn subsample_paired(
             )
             .expect("Unable to write FASTQ");
             progress_bar.inc(1);
-            if progress_bar.position() == total {
+            if progress_bar.position() as usize == total {
                 break;
             }
         }
@@ -84,7 +84,7 @@ fn subsample_single(
     writer: &mut dyn Write,
     read_suffix: &[Vec<u8>; 2],
 ) {
-    let total = read_names.len() as u64;
+    let total = read_names.len();
     let progress_bar = styled_progress_bar(total, "Subsampling FASTQ");
 
     while let Some(record) = reader.next() {
@@ -101,7 +101,7 @@ fn subsample_single(
             )
             .expect("Unable to write FASTQ");
             progress_bar.inc(1);
-            if progress_bar.position() == total {
+            if progress_bar.position() as usize == total {
                 break;
             }
         }

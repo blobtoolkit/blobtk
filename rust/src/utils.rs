@@ -1,7 +1,7 @@
 use indicatif::{ProgressBar, ProgressStyle};
 
-pub fn styled_progress_bar(total: u64, message: &str) -> ProgressBar {
-    let progress_bar = ProgressBar::new(total);
+pub fn styled_progress_bar(total: usize, message: &str) -> ProgressBar {
+    let progress_bar = ProgressBar::new(total as u64);
     let format_string = format!(
         "[+]\t{}: {{bar:40.cyan/blue}} {{pos:>7}}/{{len:12}}",
         message

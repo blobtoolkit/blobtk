@@ -24,7 +24,7 @@ fn subsample_fasta(
     mut reader: Box<dyn FastxReader>,
     writer: &mut dyn Write,
 ) {
-    let total = seq_names.len() as u64;
+    let total = seq_names.len();
     let progress_bar = styled_progress_bar(total, "Subsampling FASTA");
 
     while let Some(record) = reader.next() {
@@ -34,7 +34,7 @@ fn subsample_fasta(
             write_fasta(&seqrec.id(), &seqrec.seq(), writer, LineEnding::Unix)
                 .expect("Unable to write FASTA");
             progress_bar.inc(1);
-            if progress_bar.position() == total {
+            if progress_bar.position() as usize == total {
                 break;
             }
         }
