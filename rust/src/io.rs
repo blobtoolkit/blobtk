@@ -1,6 +1,6 @@
 extern crate atty;
 use std::collections::HashSet;
-use std::io::{self, BufRead, BufWriter, Result, StdoutLock, Write};
+use std::io::{self, BufRead, BufWriter, Result, Write};
 use std::path::{Path, PathBuf};
 
 use std::fs::File;
@@ -109,31 +109,4 @@ pub fn get_writer(file_path: &Option<PathBuf>) -> Box<dyn Write> {
         None => Box::new(BufWriter::new(io::stdout().lock())),
     };
     writer
-}
-
-fn write_file_string(entries: &Vec<String>, file_path: &PathBuf) -> Result<()> {
-    let mut w = File::create(file_path).unwrap();
-    for line in entries.into_iter() {
-        writeln!(&mut w, "{}", line).unwrap();
-    }
-    Ok(())
-}
-
-fn write_stdout_string(entries: &Vec<String>) -> Result<()> {
-    let stdout = io::stdout();
-    let lock = stdout.lock();
-    let mut w = BufWriter::new(lock);
-    for line in entries.into_iter() {
-        writeln!(&mut w, "{}", line).unwrap();
-    }
-    Ok(())
-}
-
-pub fn write_bed_file(entries: &Vec<String>, file_path: &Option<PathBuf>) -> Result<()> {
-    match &file_path {
-        None => return Ok(()),
-        &Some(p) if p == Path::new("-") => write_stdout_string(&entries),
-        &Some(_) => write_file_string(&entries, file_path.as_ref().unwrap()),
-    }?;
-    Ok(())
 }
