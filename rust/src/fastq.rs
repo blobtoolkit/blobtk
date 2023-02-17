@@ -2,6 +2,8 @@ use std::collections::HashSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use pyo3::prelude::*;
+
 extern crate needletail;
 use needletail::parser::{write_fastq, LineEnding};
 use needletail::{parse_fastx_file, FastxReader};
@@ -33,6 +35,7 @@ fn subsample_paired(
     writer: &mut dyn Write,
     paired_writer: &mut dyn Write,
     read_suffix: &[Vec<u8>; 2],
+    py: &Option<Python>,
 ) {
     let total = read_names.len();
     let progress_bar = styled_progress_bar(total, "Subsampling FASTQ");
@@ -74,6 +77,10 @@ fn subsample_paired(
                 break;
             }
         }
+        match py {
+            Some(python) => python.check_signals().unwrap(),
+            None => (),
+        }
     }
     progress_bar.finish();
 }
@@ -83,6 +90,7 @@ fn subsample_single(
     mut reader: Box<dyn FastxReader>,
     writer: &mut dyn Write,
     read_suffix: &[Vec<u8>; 2],
+    py: &Option<Python>,
 ) {
     let total = read_names.len();
     let progress_bar = styled_progress_bar(total, "Subsampling FASTQ");
@@ -104,6 +112,10 @@ fn subsample_single(
             if progress_bar.position() as usize == total {
                 break;
             }
+        }
+        match py {
+            Some(python) => python.check_signals().unwrap(),
+            None => (),
         }
     }
     progress_bar.finish();
@@ -152,6 +164,7 @@ pub fn subsample(
     fastq_path_2: &Option<PathBuf>,
     fastq_out: &bool,
     suffix: &String,
+    py: &Option<Python>,
 ) -> () {
     if let None = fastq_path_1 {
         return;
@@ -174,8 +187,9 @@ pub fn subsample(
             &mut *writer,
             &mut *paired_writer,
             &read_suffix,
+            &py,
         );
     } else if let Some(_) = reader {
-        subsample_single(read_names, reader.unwrap(), &mut *writer, &read_suffix);
+        subsample_single(read_names, reader.unwrap(), &mut *writer, &read_suffix, &py);
     }
 }

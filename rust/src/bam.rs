@@ -4,6 +4,8 @@ use std::io::{ErrorKind, Result, Write};
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
+use pyo3::prelude::*;
+use pyo3::pyclass;
 use rust_htslib::bam::{index, Header, IndexedReader, Read};
 use rust_htslib::htslib;
 
@@ -57,7 +59,11 @@ pub fn open_bam(
     bam
 }
 
-pub fn reads_from_bam(seq_names: &HashSet<Vec<u8>>, mut bam: IndexedReader) -> HashSet<Vec<u8>> {
+pub fn reads_from_bam(
+    seq_names: &HashSet<Vec<u8>>,
+    mut bam: IndexedReader,
+    py: &Option<Python>,
+) -> HashSet<Vec<u8>> {
     let mut wanted_reads = HashSet::new();
     let total = seq_names.len();
     let progress_bar = styled_progress_bar(total, "Locating alignments");
@@ -82,6 +88,11 @@ pub fn reads_from_bam(seq_names: &HashSet<Vec<u8>>, mut bam: IndexedReader) -> H
             })
         {
             wanted_reads.insert(read.qname().to_vec());
+        }
+
+        match py {
+            Some(python) => python.check_signals().unwrap(),
+            None => (),
         }
         progress_bar.inc(1);
     }
@@ -110,36 +121,43 @@ fn seq_lengths_from_header(
     seq_lengths
 }
 
-// #[derive(Clone, Debug)]
-// pub struct BinnedCov {
-//     seq_name: String,
-//     bins: Vec<f64>,
-//     bin_count: usize,
-//     last_bin: usize,
-//     seq_length: usize,
-//     step: usize,
-// }
+#[derive(Clone, Debug)]
+#[pyclass]
+pub struct BinnedCov {
+    #[pyo3(get)]
+    seq_name: String,
+    #[pyo3(get)]
+    bins: Vec<f64>,
+    #[pyo3(get)]
+    bin_count: usize,
+    #[pyo3(get)]
+    last_bin: usize,
+    #[pyo3(get)]
+    seq_length: usize,
+    #[pyo3(get)]
+    step: usize,
+}
 
-// impl BinnedCov {
-//     pub fn seq_name(self) -> String {
-//         self.seq_name
-//     }
-//     pub fn bins(self) -> Vec<f64> {
-//         self.bins
-//     }
-//     pub fn bin_count(self) -> usize {
-//         self.bin_count
-//     }
-//     pub fn seq_length(self) -> usize {
-//         self.seq_length
-//     }
-//     pub fn last_bin(self) -> usize {
-//         self.last_bin
-//     }
-//     pub fn step(self) -> usize {
-//         self.step
-//     }
-// }
+impl BinnedCov {
+    pub fn seq_name(self) -> String {
+        self.seq_name
+    }
+    pub fn bins(self) -> Vec<f64> {
+        self.bins
+    }
+    pub fn bin_count(self) -> usize {
+        self.bin_count
+    }
+    pub fn seq_length(self) -> usize {
+        self.seq_length
+    }
+    pub fn last_bin(self) -> usize {
+        self.last_bin
+    }
+    pub fn step(self) -> usize {
+        self.step
+    }
+}
 
 fn depth_to_bed(
     raw_cov: Vec<usize>,
@@ -159,14 +177,6 @@ fn depth_to_bed(
         }
         bins.push(cov as f64 / divisor as f64);
     }
-    // let binned_cov = BinnedCov {
-    //     seq_name: seq_name.to_owned(),
-    //     step,
-    //     bin_count: bins.len(),
-    //     bins,
-    //     seq_length,
-    //     last_bin: divisor,
-    // };
     let mut start = 0;
     let mut end;
     let bin_count = bins.len();
@@ -185,17 +195,17 @@ fn depth_to_bed(
     Ok(())
 }
 
-pub fn depth_from_bam(
+pub fn bed_from_bam(
     seq_lengths: &IndexMap<String, usize>,
     mut bam: IndexedReader,
     options: &DepthOptions,
+    py: Option<Python>,
 ) -> () {
     let total = seq_lengths.len();
     let progress_bar = styled_progress_bar(total, "Locating alignments");
     let bin_size = options.bin_size;
     let step = bin_size;
-    println!("{:?}", &options.output);
-    let mut writer = get_writer(&options.output);
+    let mut writer = get_writer(&options.bed);
     for (seq_name, length) in seq_lengths.clone() {
         let mut raw_cov: Vec<usize> = vec![];
         for _ in (0..length).step_by(step) {
@@ -210,6 +220,10 @@ pub fn depth_from_bam(
             let bin = pileup.pos() as usize / step;
             raw_cov[bin] += pileup.depth() as usize;
         }
+        match py {
+            Some(python) => python.check_signals().unwrap(),
+            None => (),
+        }
         match depth_to_bed(raw_cov, &length, step, &seq_name, &mut writer) {
             Err(err) if err.kind() == ErrorKind::BrokenPipe => return,
             Err(err) => panic!("unable to write {} to bed file: {}", &seq_name, err),
@@ -220,7 +234,85 @@ pub fn depth_from_bam(
     progress_bar.finish();
 }
 
-pub fn get_depth(bam: IndexedReader, seq_names: &HashSet<Vec<u8>>, options: &DepthOptions) -> () {
+fn depth_to_cov(raw_cov: Vec<usize>, length: &usize, step: usize, seq_name: &String) -> BinnedCov {
+    let mut bins: Vec<f64> = vec![];
+    let mut divisor = step;
+    let mut end: usize = 0;
+    let seq_length = length.to_owned();
+    for cov in raw_cov {
+        end += step;
+        if end > seq_length {
+            divisor -= end - seq_length;
+        }
+        bins.push(cov as f64 / divisor as f64);
+    }
+    BinnedCov {
+        seq_name: seq_name.to_owned(),
+        step,
+        bin_count: bins.len(),
+        bins,
+        seq_length,
+        last_bin: divisor,
+    }
+}
+
+pub fn depth_from_bam(
+    seq_lengths: &IndexMap<String, usize>,
+    mut bam: IndexedReader,
+    options: &DepthOptions,
+    py: Option<Python>,
+) -> Vec<BinnedCov> {
+    let total = seq_lengths.len();
+    let progress_bar = styled_progress_bar(total, "Locating alignments");
+    let bin_size = options.bin_size;
+    let step = bin_size;
+    let mut binned_covs = vec![];
+    for (seq_name, length) in seq_lengths.clone() {
+        let mut raw_cov: Vec<usize> = vec![];
+        for _ in (0..length).step_by(step) {
+            raw_cov.push(0)
+        }
+        match bam.fetch(&seq_name) {
+            Err(_) => eprintln!("Sequence {:?} not found in BAM file", seq_name),
+            Ok(_) => (),
+        }
+        for p in bam.pileup() {
+            let pileup = p.unwrap();
+            let bin = pileup.pos() as usize / step;
+            raw_cov[bin] += pileup.depth() as usize;
+        }
+        match py {
+            Some(python) => python.check_signals().unwrap(),
+            None => (),
+        }
+        binned_covs.push(depth_to_cov(raw_cov, &length, step, &seq_name));
+        // match depth_to_bed(raw_cov, &length, step, &seq_name, &mut writer) {
+        //     Err(err) if err.kind() == ErrorKind::BrokenPipe => return,
+        //     Err(err) => panic!("unable to write {} to bed file: {}", &seq_name, err),
+        //     Ok(_) => (),
+        // };
+        progress_bar.inc(1);
+    }
+    progress_bar.finish();
+    binned_covs
+}
+
+pub fn get_bed_file(
+    bam: IndexedReader,
+    seq_names: &HashSet<Vec<u8>>,
+    options: &DepthOptions,
+    py: Option<Python>,
+) -> () {
     let seq_lengths = seq_lengths_from_header(&bam, &seq_names);
-    depth_from_bam(&seq_lengths, bam, options);
+    bed_from_bam(&seq_lengths, bam, options, py);
+}
+
+pub fn get_depth(
+    bam: IndexedReader,
+    seq_names: &HashSet<Vec<u8>>,
+    options: &DepthOptions,
+    py: Option<Python>,
+) -> Vec<BinnedCov> {
+    let seq_lengths = seq_lengths_from_header(&bam, &seq_names);
+    depth_from_bam(&seq_lengths, bam, options, py)
 }

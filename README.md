@@ -71,7 +71,12 @@ print(read_count)
 from blobtoolkit_core import depth
 
 # generate bed file of coverage depths
-depth.depth(bam="test/test.bam", outfile="test/pytest.bed")
+depth.bam_to_bed(bam="test/test.bam", bed="test/pytest.bed")
+depth.bam_to_bed(bam="test/test.bam", bin_size=1000, bed="test/pytest.1000.bed")
+
+binned_covs = depth.bam_to_depth(bam="test/test.bam")
+for cov in binned_covs:
+    print({cov.seq_name(): cov.bins()})
 
 
 ```

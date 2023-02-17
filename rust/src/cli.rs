@@ -131,8 +131,8 @@ pub struct DepthOptions {
     // #[arg(long = "window-size", short = 'w', num_args(1..), default_values_t = [1.0], value_parser = window_size_range, action = clap::ArgAction::Append)]
     // pub window_size: Vec<f64>,
     /// Output bed file name
-    #[arg(long = "output", short = 'O', value_name = "BED")]
-    pub output: Option<PathBuf>,
+    #[arg(long = "bed", short = 'O', value_name = "BED")]
+    pub bed: Option<PathBuf>,
 }
 
 pub fn parse() -> Arguments {

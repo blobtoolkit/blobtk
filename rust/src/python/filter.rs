@@ -12,33 +12,6 @@ use crate::python::utils::{
 };
 use pyo3::prelude::*;
 
-// #[derive(Debug)]
-// #[pyclass]
-// pub struct FilterOptions {
-//     /// List of sequence IDs
-//     pub list: Option<HashSet<Vec<u8>>>,
-//     /// File containing a list of sequence IDs
-//     pub list_file: Option<PathBuf>,
-//     /// Path to BAM file
-//     pub bam: Option<PathBuf>,
-//     /// Path to CRAM file
-//     pub cram: Option<PathBuf>,
-//     /// Path to assembly FASTA input file (required for CRAM)
-//     pub fasta: Option<PathBuf>,
-//     /// Path to FASTQ file to filter (forward or single reads)
-//     pub fastq1: Option<PathBuf>,
-//     /// Path to paired FASTQ file to filter (reverse reads)
-//     pub fastq2: Option<PathBuf>,
-//     /// Suffix to use for output filtered files
-//     pub suffix: String,
-//     /// Flag to output a filtered FASTA file
-//     pub fasta_out: bool,
-//     /// Flag to output filtered FASTQ files
-//     pub fastq_out: bool,
-//     /// Path to output list of read IDs
-//     pub read_list: Option<PathBuf>,
-// }
-
 #[pymethods]
 impl FilterOptions {
     #[new]
@@ -72,7 +45,7 @@ impl FilterOptions {
 }
 
 #[pyfunction]
-pub fn fastx_with_options(options: &FilterOptions) -> PyResult<usize> {
+pub fn fastx_with_options(options: &FilterOptions, py: Python) -> PyResult<usize> {
     let seq_names = match options.list.to_owned() {
         Some(value) => value,
         _ => match options.list_file.to_owned() {
@@ -87,12 +60,13 @@ pub fn fastx_with_options(options: &FilterOptions) -> PyResult<usize> {
         &options.fasta,
         &options.fasta_out,
         &options.suffix,
+        &Some(py),
     );
     if options.bam == None && options.cram == None {
         return Ok(0);
     }
     let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta, true);
-    let read_names = bam::reads_from_bam(&seq_names, bam);
+    let read_names = bam::reads_from_bam(&seq_names, bam, &Some(py));
     io::write_list(&read_names, &options.read_list)?;
     fastq::subsample(
         &read_names,
@@ -100,6 +74,7 @@ pub fn fastx_with_options(options: &FilterOptions) -> PyResult<usize> {
         &options.fastq2,
         &options.fastq_out,
         &options.suffix,
+        &Some(py),
     );
     Ok(read_names.len())
 }
@@ -137,5 +112,5 @@ pub fn fastx(py: Python<'_>, kwds: Option<HashMap<String, PyObject>>) -> PyResul
         Some(map) => convert_hashmap_to_options(py, map),
         None => panic!["No arguments provided"],
     };
-    fastx_with_options(&options)
+    fastx_with_options(&options, py)
 }
