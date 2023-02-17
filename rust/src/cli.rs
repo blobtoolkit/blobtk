@@ -1,5 +1,8 @@
-use clap::{ArgGroup, Parser, Subcommand};
+use std::collections::HashSet;
 use std::path::PathBuf;
+
+use clap::{ArgGroup, Parser, Subcommand};
+use pyo3::pyclass;
 
 // fn float_range(s: &str, min: f64, max: f64) -> Result<f64, String> {
 //     debug_assert!(min <= max, "minimum of {} exceeds maximum of {}", min, max);
@@ -45,9 +48,13 @@ pub enum SubCommand {
         .required(false)
         .args(["bam", "cram"]),
 ))]
+#[pyclass]
 pub struct FilterOptions {
-    /// Path to input file containing a list of sequence IDs
     // TODO: add option to invert list (use BAM header)
+    /// List of sequence IDs
+    #[clap(skip)]
+    pub list: Option<HashSet<Vec<u8>>>,
+    /// Path to input file containing a list of sequence IDs
     #[arg(long = "list", short = 'i', value_name = "TXT")]
     pub list_file: Option<PathBuf>,
     /// Path to BAM file
@@ -100,7 +107,11 @@ pub struct FilterOptions {
         .required(false)
         .args(["bam", "cram"]),
 ))]
+#[pyclass]
 pub struct DepthOptions {
+    /// List of sequence IDs
+    #[clap(skip)]
+    pub list: Option<HashSet<Vec<u8>>>,
     /// Path to input file containing a list of sequence IDs
     #[arg(long = "list", short = 'i', value_name = "TXT")]
     pub list_file: Option<PathBuf>,

@@ -62,15 +62,16 @@ Options:
 from blobtoolkit_core import filter
 
 # filter fastq files based on a list of sequence names
-read_count = filter.fastx(
-    {
-        "list_file": "test/test.list",
-        "bam": "test/test.bam",
-        "fastq1": "test/reads_1.fq.gz",
-        "fastq2": "test/reads_2.fq.gz",
-        "fastq_out": True,
-    }
-)
+read_count = filter.fastx(list_file="test/test.list", bam="test/test.bam", fastq1="test/reads_1.fq.gz", fastq2="test/reads_2.fq.gz", fastq_out=True)
 
 print(read_count)
+```
+
+```
+from blobtoolkit_core import depth
+
+# generate bed file of coverage depths
+depth.depth(bam="test/test.bam", outfile="test/pytest.bed")
+
+
 ```

@@ -194,6 +194,7 @@ pub fn depth_from_bam(
     let progress_bar = styled_progress_bar(total, "Locating alignments");
     let bin_size = options.bin_size;
     let step = bin_size;
+    println!("{:?}", &options.output);
     let mut writer = get_writer(&options.output);
     for (seq_name, length) in seq_lengths.clone() {
         let mut raw_cov: Vec<usize> = vec![];
