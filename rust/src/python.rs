@@ -1,7 +1,5 @@
 use pyo3::prelude::*;
 
-// use crate::cli;
-
 mod depth;
 mod filter;
 mod utils;
@@ -15,7 +13,6 @@ fn blobtk(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     let depth = PyModule::new(py, "depth")?;
     depth.add_function(wrap_pyfunction!(depth::bam_to_bed, m)?)?;
     depth.add_function(wrap_pyfunction!(depth::bam_to_depth, m)?)?;
-    // depth.add_class::<bam::DepthOptions>()?;
     m.add_submodule(depth)?;
 
     Ok(())

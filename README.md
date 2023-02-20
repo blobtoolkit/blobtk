@@ -1,8 +1,8 @@
-# BlobToolKit Core (v0.1.2)
+# BlobTk (v0.1.2)
 
 ## About
 
-BlobToolKit Core contains a set of core functions used by BlobToolKit tools. Implemented in Rust, these functions are intended to be accessible from the command line, as python modules and web assembly code for use in javascript.
+BlobTk contains a set of core functions used by BlobToolKit tools. Implemented in Rust, these functions are intended to be accessible from the command line, as python modules and web assembly code for use in javascript.
 
 ## Installing
 
@@ -56,6 +56,32 @@ Options:
   -h, --help             Print help information
 ```
 
+```
+blobtk filter -i test/test.list -b test/test.bam -f test/reads_1.fq.gz -r test/reads_2.fq.gz -F
+```
+
+```
+blobtk depth --help
+Calculate read/base coverage depth
+
+Usage: blobtk depth [OPTIONS]
+
+Options:
+  -i, --list <TXT>           Path to input file containing a list of sequence IDs
+  -b, --bam <BAM>            Path to BAM file
+  -c, --cram <CRAM>          Path to CRAM file
+  -a, --fasta <FASTA>        Path to assembly FASTA input file (required for CRAM)
+  -s, --bin-size <BIN_SIZE>  Bin size for coverage calculations (use 0 for full contig length) [default: 1000]
+  -O, --bed <BED>            Output bed file name
+  -h, --help                 Print help information
+```
+
+```
+blobtk depth -b test/test.bam -O test/test.bed
+
+blobtk depth -b test/test.bam -s 1000 -O test/test.1000.bed
+```
+
 ### Python module
 
 ```
@@ -76,7 +102,7 @@ depth.bam_to_bed(bam="test/test.bam", bin_size=1000, bed="test/pytest.1000.bed")
 
 binned_covs = depth.bam_to_depth(bam="test/test.bam")
 for cov in binned_covs:
-    print({cov.seq_name: cov.bins})
+    print({cov.seq_name: cov.bins[0]})
 
 
 ```

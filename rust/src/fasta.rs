@@ -2,8 +2,6 @@ use std::collections::HashSet;
 use std::io::Write;
 use std::path::PathBuf;
 
-use pyo3::prelude::*;
-
 extern crate needletail;
 use needletail::parser::{write_fasta, LineEnding};
 use needletail::FastxReader;
@@ -21,11 +19,11 @@ fn trim_seq_id(input: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-fn subsample_fasta(
+fn subsample_fasta<F: Fn() -> ()>(
     seq_names: &HashSet<Vec<u8>>,
     mut reader: Box<dyn FastxReader>,
     writer: &mut dyn Write,
-    py: &Option<Python>,
+    callback: &Option<F>,
 ) {
     let total = seq_names.len();
     let progress_bar = styled_progress_bar(total, "Subsampling FASTA");
@@ -41,20 +39,21 @@ fn subsample_fasta(
                 break;
             }
         }
-        match py {
-            Some(python) => python.check_signals().unwrap(),
+
+        match callback {
+            Some(cb) => cb(),
             None => (),
         }
     }
     progress_bar.finish();
 }
 
-pub fn subsample(
+pub fn subsample<F: Fn() -> ()>(
     seq_names: &HashSet<Vec<u8>>,
     fasta_path: &Option<PathBuf>,
     fasta_out: &bool,
     suffix: &String,
-    py: &Option<Python>,
+    callback: &Option<F>,
 ) -> () {
     if let None = fasta_path {
         return;
@@ -62,10 +61,12 @@ pub fn subsample(
     if !fasta_out {
         return;
     }
+
     let reader = open_fastx(fasta_path);
     let out_path = suffix_file_name(fasta_path.as_ref().unwrap(), &suffix);
     let mut writer = get_writer(&Some(out_path));
+
     if let Some(_) = reader {
-        subsample_fasta(seq_names, reader.unwrap(), &mut *writer, &py);
+        subsample_fasta(seq_names, reader.unwrap(), &mut *writer, &callback);
     }
 }

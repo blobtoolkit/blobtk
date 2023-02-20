@@ -2,8 +2,6 @@ use std::collections::HashSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use pyo3::prelude::*;
-
 extern crate needletail;
 use needletail::parser::{write_fastq, LineEnding};
 use needletail::{parse_fastx_file, FastxReader};
@@ -28,14 +26,14 @@ fn trim_read_id(input: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-fn subsample_paired(
+fn subsample_paired<F: Fn() -> ()>(
     read_names: &HashSet<Vec<u8>>,
     mut reader: Box<dyn FastxReader>,
     mut paired_reader: Box<dyn FastxReader>,
     writer: &mut dyn Write,
     paired_writer: &mut dyn Write,
     read_suffix: &[Vec<u8>; 2],
-    py: &Option<Python>,
+    callback: &Option<F>,
 ) {
     let total = read_names.len();
     let progress_bar = styled_progress_bar(total, "Subsampling FASTQ");
@@ -77,20 +75,20 @@ fn subsample_paired(
                 break;
             }
         }
-        match py {
-            Some(python) => python.check_signals().unwrap(),
+        match callback {
+            Some(cb) => cb(),
             None => (),
         }
     }
     progress_bar.finish();
 }
 
-fn subsample_single(
+fn subsample_single<F: Fn() -> ()>(
     read_names: &HashSet<Vec<u8>>,
     mut reader: Box<dyn FastxReader>,
     writer: &mut dyn Write,
     read_suffix: &[Vec<u8>; 2],
-    py: &Option<Python>,
+    callback: &Option<F>,
 ) {
     let total = read_names.len();
     let progress_bar = styled_progress_bar(total, "Subsampling FASTQ");
@@ -113,8 +111,8 @@ fn subsample_single(
                 break;
             }
         }
-        match py {
-            Some(python) => python.check_signals().unwrap(),
+        match callback {
+            Some(cb) => cb(),
             None => (),
         }
     }
@@ -158,13 +156,13 @@ fn set_read_suffix(read_names: &HashSet<Vec<u8>>) -> [Vec<u8>; 2] {
     [vec![b'/', b'1'], vec![b'/', b'2']]
 }
 
-pub fn subsample(
+pub fn subsample<F: Fn() -> ()>(
     read_names: &HashSet<Vec<u8>>,
     fastq_path_1: &Option<PathBuf>,
     fastq_path_2: &Option<PathBuf>,
     fastq_out: &bool,
     suffix: &String,
-    py: &Option<Python>,
+    callback: &Option<F>,
 ) -> () {
     if let None = fastq_path_1 {
         return;
@@ -187,9 +185,15 @@ pub fn subsample(
             &mut *writer,
             &mut *paired_writer,
             &read_suffix,
-            &py,
+            &callback,
         );
     } else if let Some(_) = reader {
-        subsample_single(read_names, reader.unwrap(), &mut *writer, &read_suffix, &py);
+        subsample_single(
+            read_names,
+            reader.unwrap(),
+            &mut *writer,
+            &read_suffix,
+            &callback,
+        );
     }
 }

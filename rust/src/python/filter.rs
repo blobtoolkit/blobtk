@@ -46,6 +46,10 @@ impl FilterOptions {
 
 #[pyfunction]
 pub fn fastx_with_options(options: &FilterOptions, py: Python) -> PyResult<usize> {
+    let ctrlc_wrapper = || {
+        py.check_signals().unwrap();
+    };
+
     let seq_names = match options.list.to_owned() {
         Some(value) => value,
         _ => match options.list_file.to_owned() {
@@ -60,13 +64,13 @@ pub fn fastx_with_options(options: &FilterOptions, py: Python) -> PyResult<usize
         &options.fasta,
         &options.fasta_out,
         &options.suffix,
-        &Some(py),
+        &Some(Box::new(ctrlc_wrapper)),
     );
     if options.bam == None && options.cram == None {
         return Ok(0);
     }
     let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta, true);
-    let read_names = bam::reads_from_bam(&seq_names, bam, &Some(py));
+    let read_names = bam::reads_from_bam(&seq_names, bam, &Some(Box::new(ctrlc_wrapper)));
     io::write_list(&read_names, &options.read_list)?;
     fastq::subsample(
         &read_names,
@@ -74,7 +78,7 @@ pub fn fastx_with_options(options: &FilterOptions, py: Python) -> PyResult<usize
         &options.fastq2,
         &options.fastq_out,
         &options.suffix,
-        &Some(py),
+        &Some(Box::new(ctrlc_wrapper)),
     );
     Ok(read_names.len())
 }

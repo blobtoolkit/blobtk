@@ -4,8 +4,7 @@ use std::io::{ErrorKind, Result, Write};
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
-use pyo3::prelude::*;
-use pyo3::pyclass;
+use pyo3::{self, pyclass};
 use rust_htslib::bam::{index, Header, IndexedReader, Read};
 use rust_htslib::htslib;
 
@@ -59,10 +58,10 @@ pub fn open_bam(
     bam
 }
 
-pub fn reads_from_bam(
+pub fn reads_from_bam<F: Fn() -> ()>(
     seq_names: &HashSet<Vec<u8>>,
     mut bam: IndexedReader,
-    py: &Option<Python>,
+    callback: &Option<F>,
 ) -> HashSet<Vec<u8>> {
     let mut wanted_reads = HashSet::new();
     let total = seq_names.len();
@@ -90,8 +89,8 @@ pub fn reads_from_bam(
             wanted_reads.insert(read.qname().to_vec());
         }
 
-        match py {
-            Some(python) => python.check_signals().unwrap(),
+        match callback {
+            Some(cb) => cb(),
             None => (),
         }
         progress_bar.inc(1);
@@ -195,11 +194,11 @@ fn depth_to_bed(
     Ok(())
 }
 
-pub fn bed_from_bam(
+pub fn bed_from_bam<F: Fn() -> ()>(
     seq_lengths: &IndexMap<String, usize>,
     mut bam: IndexedReader,
     options: &DepthOptions,
-    py: Option<Python>,
+    callback: &Option<F>,
 ) -> () {
     let total = seq_lengths.len();
     let progress_bar = styled_progress_bar(total, "Locating alignments");
@@ -220,8 +219,8 @@ pub fn bed_from_bam(
             let bin = pileup.pos() as usize / step;
             raw_cov[bin] += pileup.depth() as usize;
         }
-        match py {
-            Some(python) => python.check_signals().unwrap(),
+        match callback {
+            Some(cb) => cb(),
             None => (),
         }
         match depth_to_bed(raw_cov, &length, step, &seq_name, &mut writer) {
@@ -256,11 +255,11 @@ fn depth_to_cov(raw_cov: Vec<usize>, length: &usize, step: usize, seq_name: &Str
     }
 }
 
-pub fn depth_from_bam(
+pub fn depth_from_bam<F: Fn() -> ()>(
     seq_lengths: &IndexMap<String, usize>,
     mut bam: IndexedReader,
     options: &DepthOptions,
-    py: Option<Python>,
+    callback: &Option<F>,
 ) -> Vec<BinnedCov> {
     let total = seq_lengths.len();
     let progress_bar = styled_progress_bar(total, "Locating alignments");
@@ -281,8 +280,8 @@ pub fn depth_from_bam(
             let bin = pileup.pos() as usize / step;
             raw_cov[bin] += pileup.depth() as usize;
         }
-        match py {
-            Some(python) => python.check_signals().unwrap(),
+        match callback {
+            Some(cb) => cb(),
             None => (),
         }
         binned_covs.push(depth_to_cov(raw_cov, &length, step, &seq_name));
@@ -297,22 +296,22 @@ pub fn depth_from_bam(
     binned_covs
 }
 
-pub fn get_bed_file(
+pub fn get_bed_file<F: Fn() -> ()>(
     bam: IndexedReader,
     seq_names: &HashSet<Vec<u8>>,
     options: &DepthOptions,
-    py: Option<Python>,
+    callback: &Option<F>,
 ) -> () {
     let seq_lengths = seq_lengths_from_header(&bam, &seq_names);
-    bed_from_bam(&seq_lengths, bam, options, py);
+    bed_from_bam(&seq_lengths, bam, options, callback);
 }
 
-pub fn get_depth(
+pub fn get_depth<F: Fn() -> ()>(
     bam: IndexedReader,
     seq_names: &HashSet<Vec<u8>>,
     options: &DepthOptions,
-    py: Option<Python>,
+    callback: &Option<F>,
 ) -> Vec<BinnedCov> {
     let seq_lengths = seq_lengths_from_header(&bam, &seq_names);
-    depth_from_bam(&seq_lengths, bam, options, py)
+    depth_from_bam(&seq_lengths, bam, options, callback)
 }
