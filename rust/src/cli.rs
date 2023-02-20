@@ -27,6 +27,17 @@ use pyo3::pyclass;
 //     float_range(s, 0.0001, 1000000000.0)
 // }
 
+fn bin_size_parser(s: &str) -> Result<usize, String> {
+    let mut val = match s.parse::<usize>() {
+        Ok(v) => v,
+        Err(e) => panic!("{:?}", e),
+    };
+    if val == 0 {
+        val = usize::MAX
+    }
+    Ok(val)
+}
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Arguments {
@@ -38,7 +49,7 @@ pub struct Arguments {
 pub enum SubCommand {
     /// Filter files based on list of sequence names
     Filter(FilterOptions),
-    /// Calculate read/base coverage depth
+    /// Calculate sequencing coverage depth
     Depth(DepthOptions),
 }
 
@@ -125,7 +136,7 @@ pub struct DepthOptions {
     #[arg(long, short = 'a')]
     pub fasta: Option<PathBuf>,
     /// Bin size for coverage calculations (use 0 for full contig length)
-    #[arg(long = "bin-size", short = 's', default_value_t = 1000)]
+    #[arg(long = "bin-size", short = 's', default_value_t = 0, value_parser = bin_size_parser)]
     pub bin_size: usize,
     // /// Window size for coverage calculations size
     // #[arg(long = "window-size", short = 'w', num_args(1..), default_values_t = [1.0], value_parser = window_size_range, action = clap::ArgAction::Append)]

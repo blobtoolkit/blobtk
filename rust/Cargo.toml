@@ -2,6 +2,16 @@
 name = "blobtk"
 version = "0.1.2"
 edition = "2021"
+authors = [
+    "Rich Challis <rc28@sanger.ac.uk>",
+]
+license = "MIT"
+description = "Core utilities for BlobToolKit."
+homepage = "https://github.com/blobtoolkit/blobtk"
+repository = "https://github.com/blobtoolkit/blobtk"
+documentation = "https://github.com/blobtoolkit/blobtk"
+keywords = ["bioinformatics", "blobtoolkit", "genome", "genomics"]
+categories = ["command-line-utilities", "science"]
 
 [lib]
 name = "blobtk"

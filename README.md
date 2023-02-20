@@ -62,7 +62,7 @@ blobtk filter -i test/test.list -b test/test.bam -f test/reads_1.fq.gz -r test/r
 
 ```
 blobtk depth --help
-Calculate read/base coverage depth
+Calculate sequencing coverage depth
 
 Usage: blobtk depth [OPTIONS]
 
