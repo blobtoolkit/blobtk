@@ -33,7 +33,7 @@ jobs:
           args: -i python --release --out dist --sdist -m rust/Cargo.toml
       - name: Install built wheel - x86_64
         run: |
-          pip install blobtoolkit-core --no-index --find-links ./dist --force-reinstall
+          pip install blobtk --no-index --find-links ./dist --force-reinstall
       - name: Build wheels - universal2
         if: ${{ matrix.python-version >= '3.8' || contains(fromJson('["3.10", "3.11"]'), matrix.python-version) }}
         uses: PyO3/maturin-action@v1
@@ -42,19 +42,19 @@ jobs:
       - name: Install built wheel - universal2
         if: ${{ matrix.python-version >= '3.8' || contains(fromJson('["3.10", "3.11"]'), matrix.python-version) }}
         run: |
-          pip install blobtoolkit-core --no-index --find-links ./dist --force-reinstall
+          pip install blobtk --no-index --find-links ./dist --force-reinstall
       # - name: Python UnitTest
       #   run: |
       #     pip install -r dev-requirements.txt
       #     make test
       - name: Rename binary
         run: |
-          mv ./rust/target/release/blobtoolkit-core ./rust/target/release/blobtoolkit-core-macos
+          mv ./rust/target/release/blobtk ./rust/target/release/blobtk-macos
       - name: Upload binary
         uses: actions/upload-artifact@v3
         with:
           name: binaries
-          path: rust/target/release/blobtoolkit-core-macos
+          path: rust/target/release/blobtk-macos
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
@@ -130,7 +130,7 @@ jobs:
       - name: Python UnitTest
         if: matrix.target == 'x86_64'
         run: |
-          pip install blobtoolkit-core --no-index --find-links ./dist --force-reinstall
+          pip install blobtk --no-index --find-links ./dist --force-reinstall
       #     pip install -r dev-requirements.txt
       #     make test
       # - name: Test no numpy installed works
@@ -140,12 +140,12 @@ jobs:
       #     python -m pytest tests/test_no_numpy.py
       - name: Rename binary
         run: |
-          mv ./rust/target/release/blobtoolkit-core ./rust/target/release/blobtoolkit-core-linux
+          mv ./rust/target/release/blobtk ./rust/target/release/blobtk-linux
       - name: Upload binary
         uses: actions/upload-artifact@v3
         with:
           name: binaries
-          path: rust/target/release/blobtoolkit-core-linux
+          path: rust/target/release/blobtk-linux
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
@@ -177,9 +177,9 @@ jobs:
           prerelease: false
           title: "v${{github.ref_name}}"
           files: |
-            dist/blobtoolkit-core-macos
-            dist/blobtoolkit-core-linux
-            dist/blobtoolkit-core*.tgz
+            dist/blobtk-macos
+            dist/blobtk-linux
+            dist/blobtk*.tgz
 
   upload-to-pypi:
     name: Upload to PyPI

@@ -1,7 +1,7 @@
 use std::process;
 
-use blobtoolkit_core::cli;
-use blobtoolkit_core::run;
+use blobtk::cli;
+use blobtk::run;
 
 fn main() {
     let args = cli::parse();

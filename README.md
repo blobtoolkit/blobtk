@@ -13,15 +13,15 @@ The command line tool is available as a linux/macos binary from the latest relea
 linux:
 
 ```
-curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.1.2/blobtoolkit-core-linux" > blobtoolkit-core &&
-chmod 755 blobtoolkit-core
+curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.1.2/blobtk-linux" > blobtk &&
+chmod 755 blobtk
 ```
 
 macos:
 
 ```
-curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.1.2/blobtoolkit-core-macos" > blobtoolkit-core &&
-chmod 755 blobtoolkit-core
+curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.1.2/blobtk-macos" > blobtk &&
+chmod 755 blobtk
 ```
 
 ### Python module
@@ -29,7 +29,7 @@ chmod 755 blobtoolkit-core
 The python can be installed using pip:
 
 ```
-pip install blobtoolkit-core
+pip install blobtk
 ```
 
 ## Usage
@@ -37,10 +37,10 @@ pip install blobtoolkit-core
 ### Command line tool
 
 ```
-./blobtoolkit-core filter --help
+./blobtk filter --help
 Filter files based on list of sequence names
 
-Usage: blobtoolkit-core filter [OPTIONS] <--bam <BAM>|--cram <CRAM>>
+Usage: blobtk filter [OPTIONS] <--bam <BAM>|--cram <CRAM>>
 
 Options:
   -i, --list <TXT>       Path to input file containing a list of sequence IDs
@@ -59,7 +59,7 @@ Options:
 ### Python module
 
 ```
-from blobtoolkit_core import filter
+from blobtk import filter
 
 # filter fastq files based on a list of sequence names
 read_count = filter.fastx(list_file="test/test.list", bam="test/test.bam", fastq1="test/reads_1.fq.gz", fastq2="test/reads_2.fq.gz", fastq_out=True)
@@ -68,7 +68,7 @@ print(read_count)
 ```
 
 ```
-from blobtoolkit_core import depth
+from blobtk import depth
 
 # generate bed file of coverage depths
 depth.bam_to_bed(bam="test/test.bam", bed="test/pytest.bed")

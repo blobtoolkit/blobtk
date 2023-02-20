@@ -7,7 +7,7 @@ mod filter;
 mod utils;
 
 #[pymodule]
-fn blobtoolkit_core(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn blobtk(py: Python<'_>, m: &PyModule) -> PyResult<()> {
     let filter = PyModule::new(py, "filter")?;
     filter.add_function(wrap_pyfunction!(filter::fastx, m)?)?;
     m.add_submodule(filter)?;

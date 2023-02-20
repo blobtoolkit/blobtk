@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from blobtoolkit_core import filter
+from blobtk import filter
 
 read_count = filter.fastx(
     {

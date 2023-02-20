@@ -1,10 +1,10 @@
 [package]
-name = "blobtoolkit-core"
+name = "blobtk"
 version = "0.1.2"
 edition = "2021"
 
 [lib]
-name = "blobtoolkit_core"
+name = "blobtk"
 path = "src/lib.rs"
 crate-type = ["cdylib", "lib"]
 
