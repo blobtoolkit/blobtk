@@ -26,3 +26,8 @@ cd - &&
 git add --all
 
 bump2version $LEVEL --allow-dirty
+
+NEW_VERSION=$(grep current_version .bumpversion.cfg | head -n 1 | cut -d' ' -f 3)
+
+git commit -a -m "Bump version: ${CURRENT_VERSION} → ${NEW_VERSION}"
+git tag -a $NEW_VERSION -m "Bump version: ${CURRENT_VERSION} → ${NEW_VERSION}"
