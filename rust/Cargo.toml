@@ -35,6 +35,6 @@ flate2 = "1.0.25"
 indexmap = "1.9.2"
 indicatif = "0.17.2"
 needletail = "0.4.1"
-pyo3 = { version = "0.17.3", features = ["extension-module"] }
+pyo3 = { version = "0.18.1", features = ["extension-module"] }
 regex = "1.7.0"
 rust-htslib = "0.40.2"

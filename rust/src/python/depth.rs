@@ -12,12 +12,12 @@ use pyo3::prelude::*;
 impl DepthOptions {
     #[new]
     fn new(
+        bin_size: usize,
         list: Option<HashSet<Vec<u8>>>,
         list_file: Option<PathBuf>,
         bam: Option<PathBuf>,
         cram: Option<PathBuf>,
         fasta: Option<PathBuf>,
-        bin_size: usize,
         bed: Option<PathBuf>,
     ) -> Self {
         DepthOptions {
@@ -74,17 +74,18 @@ fn convert_hashmap_to_options(py: Python<'_>, map: HashMap<String, PyObject>) ->
     let bed = extract_to_option_pathbuf(py, &map, "bed");
     let bin_size = extract_to_usize(py, &map, "bin_size");
     DepthOptions {
+        bin_size,
         list,
         list_file,
         bam,
         cram,
         fasta,
-        bin_size,
         bed,
     }
 }
 
-#[pyfunction(kwds = "**")]
+#[pyfunction]
+#[pyo3(signature = (**kwds))]
 pub fn bam_to_bed(py: Python<'_>, kwds: Option<HashMap<String, PyObject>>) -> PyResult<()> {
     let options = match kwds {
         Some(map) => convert_hashmap_to_options(py, map),
@@ -94,7 +95,8 @@ pub fn bam_to_bed(py: Python<'_>, kwds: Option<HashMap<String, PyObject>>) -> Py
     Ok(())
 }
 
-#[pyfunction(kwds = "**")]
+#[pyfunction]
+#[pyo3(signature = (**kwds))]
 pub fn bam_to_depth(py: Python<'_>, kwds: Option<HashMap<String, PyObject>>) -> Vec<BinnedCov> {
     let options = match kwds {
         Some(map) => convert_hashmap_to_options(py, map),

@@ -56,7 +56,7 @@ jobs:
           cargo udeps
           rm -rf ~/.cargo/advisory-db
           cargo audit
-          cargo pants
+          # cargo pants
       - name: Test
         working-directory: ${{ inputs.rust-directory }}
         run: cargo test

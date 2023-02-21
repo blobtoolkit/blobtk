@@ -17,6 +17,9 @@ impl FilterOptions {
     #[new]
     #[allow(clippy::too_many_arguments)]
     fn new(
+        suffix: String,
+        fasta_out: bool,
+        fastq_out: bool,
         list: Option<HashSet<Vec<u8>>>,
         list_file: Option<PathBuf>,
         bam: Option<PathBuf>,
@@ -24,12 +27,12 @@ impl FilterOptions {
         fasta: Option<PathBuf>,
         fastq1: Option<PathBuf>,
         fastq2: Option<PathBuf>,
-        suffix: String,
-        fasta_out: bool,
-        fastq_out: bool,
         read_list: Option<PathBuf>,
     ) -> Self {
         FilterOptions {
+            suffix,
+            fasta_out,
+            fastq_out,
             list,
             list_file,
             bam,
@@ -37,9 +40,6 @@ impl FilterOptions {
             fasta,
             fastq1,
             fastq2,
-            suffix,
-            fasta_out,
-            fastq_out,
             read_list,
         }
     }
@@ -98,6 +98,9 @@ fn convert_hashmap_to_options(py: Python<'_>, map: HashMap<String, PyObject>) ->
     let fasta_out = extract_to_bool(py, &map, "fasta_out");
     let fastq_out = extract_to_bool(py, &map, "fastq_out");
     FilterOptions {
+        suffix,
+        fasta_out,
+        fastq_out,
         list,
         list_file,
         bam,
@@ -105,14 +108,12 @@ fn convert_hashmap_to_options(py: Python<'_>, map: HashMap<String, PyObject>) ->
         fasta,
         fastq1,
         fastq2,
-        suffix,
-        fasta_out,
-        fastq_out,
         read_list,
     }
 }
 
-#[pyfunction(kwds = "**")]
+#[pyfunction]
+#[pyo3(signature = (**kwds))]
 pub fn fastx(py: Python<'_>, kwds: Option<HashMap<String, PyObject>>) -> PyResult<usize> {
     let options = match kwds {
         Some(map) => convert_hashmap_to_options(py, map),
