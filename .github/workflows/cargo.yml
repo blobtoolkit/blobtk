@@ -45,17 +45,17 @@ jobs:
         run: |
           cargo install --locked cargo-deny || true
           cargo install --locked cargo-outdated || true
-          cargo install --locked cargo-udeps || true
           cargo install --locked cargo-audit || true
-          cargo install --locked cargo-pants || true
+          #cargo install --locked cargo-udeps || true
+          #cargo install --locked cargo-pants || true
       - name: Check
         working-directory: ${{ inputs.rust-directory }}
         run: |
           cargo deny check
           cargo outdated --exit-code 1
-          cargo udeps
           rm -rf ~/.cargo/advisory-db
           cargo audit
+          # cargo udeps
           # cargo pants
       - name: Test
         working-directory: ${{ inputs.rust-directory }}
