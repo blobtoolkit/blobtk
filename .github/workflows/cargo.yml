@@ -1,0 +1,62 @@
+on:
+  workflow_call:
+    inputs:
+      rust-version:
+        type: string
+        required: false
+        default: stable
+      rust-directory:
+        type: string
+        required: false
+        default: ./rust
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v3
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ inputs.rust-version }}
+          override: true
+          components: rustfmt, clippy
+      - name: Set up cargo cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ${{ inputs.rust-directory }}/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Lint
+        working-directory: ${{ inputs.rust-directory }}
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy -- -D warnings
+      - name: Install cargo check tools
+        working-directory: ${{ inputs.rust-directory }}
+        run: |
+          cargo install --locked cargo-deny || true
+          cargo install --locked cargo-outdated || true
+          cargo install --locked cargo-udeps || true
+          cargo install --locked cargo-audit || true
+          cargo install --locked cargo-pants || true
+      - name: Check
+        working-directory: ${{ inputs.rust-directory }}
+        run: |
+          cargo deny check
+          cargo outdated --exit-code 1
+          cargo udeps
+          rm -rf ~/.cargo/advisory-db
+          cargo audit
+          cargo pants
+      - name: Test
+        working-directory: ${{ inputs.rust-directory }}
+        run: cargo test

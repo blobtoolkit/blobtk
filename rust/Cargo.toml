@@ -12,6 +12,10 @@ repository = "https://github.com/blobtoolkit/blobtk"
 documentation = "https://github.com/blobtoolkit/blobtk"
 keywords = ["bioinformatics", "blobtoolkit", "genome", "genomics"]
 categories = ["command-line-utilities", "science"]
+exclude = [
+    "*.sh",
+    "test/*",
+]
 
 [lib]
 name = "blobtk"
