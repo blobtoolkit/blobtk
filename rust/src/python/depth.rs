@@ -36,15 +36,16 @@ impl DepthOptions {
 pub fn bam_to_bed_with_options(options: &DepthOptions, py: Python) -> PyResult<usize> {
     let seq_names = match options.list.to_owned() {
         Some(value) => value,
-        _ => match options.list_file.to_owned() {
-            value => io::get_list(&value),
-        },
+        _ => {
+            let value = options.list_file.to_owned();
+            io::get_list(&value)
+        }
     };
     let ctrlc_wrapper = || {
         py.check_signals().unwrap();
     };
     let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta, true);
-    bam::get_bed_file(bam, &seq_names, &options, &Some(Box::new(ctrlc_wrapper)));
+    bam::get_bed_file(bam, &seq_names, options, &Some(Box::new(ctrlc_wrapper)));
     Ok(1)
 }
 
@@ -52,15 +53,16 @@ pub fn bam_to_bed_with_options(options: &DepthOptions, py: Python) -> PyResult<u
 pub fn bam_to_depth_with_options(options: &DepthOptions, py: Python) -> Vec<BinnedCov> {
     let seq_names = match options.list.to_owned() {
         Some(value) => value,
-        _ => match options.list_file.to_owned() {
-            value => io::get_list(&value),
-        },
+        _ => {
+            let value = options.list_file.to_owned();
+            io::get_list(&value)
+        }
     };
     let ctrlc_wrapper = || {
         py.check_signals().unwrap();
     };
     let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta, true);
-    bam::get_depth(bam, &seq_names, &options, &Some(Box::new(ctrlc_wrapper)))
+    bam::get_depth(bam, &seq_names, options, &Some(Box::new(ctrlc_wrapper)))
 }
 
 fn convert_hashmap_to_options(py: Python<'_>, map: HashMap<String, PyObject>) -> DepthOptions {

@@ -15,11 +15,6 @@ pub use cli::DepthOptions;
 pub fn depth(options: &cli::DepthOptions) -> Result<(), Box<dyn Error>> {
     let seq_names = io::get_list(&options.list_file);
     let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta, true);
-    bam::get_bed_file(
-        bam,
-        &seq_names,
-        &options,
-        &None as &Option<Box<dyn Fn() -> ()>>,
-    );
+    bam::get_bed_file(bam, &seq_names, options, &None as &Option<Box<dyn Fn()>>);
     Ok(())
 }

@@ -30,10 +30,9 @@ pub fn extract_to_option_pathbuf(
     key: &str,
 ) -> Option<PathBuf> {
     let hash_key = String::from(key);
-    let option: Option<PathBuf> = match map.get(&hash_key) {
-        Some(value) => Some(value.extract::<PathBuf>(py).unwrap()),
-        _ => None,
-    };
+    let option: Option<PathBuf> = map
+        .get(&hash_key)
+        .map(|value| value.extract::<PathBuf>(py).unwrap());
     option
 }
 

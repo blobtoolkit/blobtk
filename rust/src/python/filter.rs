@@ -15,6 +15,7 @@ use pyo3::prelude::*;
 #[pymethods]
 impl FilterOptions {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         list: Option<HashSet<Vec<u8>>>,
         list_file: Option<PathBuf>,
@@ -52,11 +53,12 @@ pub fn fastx_with_options(options: &FilterOptions, py: Python) -> PyResult<usize
 
     let seq_names = match options.list.to_owned() {
         Some(value) => value,
-        _ => match options.list_file.to_owned() {
-            value => io::get_list(&value),
-        },
+        _ => {
+            let value = options.list_file.to_owned();
+            io::get_list(&value)
+        }
     };
-    if seq_names.len() == 0 {
+    if seq_names.is_empty() {
         return Ok(0);
     }
     fasta::subsample(
@@ -66,7 +68,7 @@ pub fn fastx_with_options(options: &FilterOptions, py: Python) -> PyResult<usize
         &options.suffix,
         &Some(Box::new(ctrlc_wrapper)),
     );
-    if options.bam == None && options.cram == None {
+    if options.bam.is_none() && options.cram.is_none() {
         return Ok(0);
     }
     let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta, true);

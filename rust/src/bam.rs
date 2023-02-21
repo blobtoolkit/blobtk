@@ -24,7 +24,7 @@ fn add_extension(path: &mut PathBuf, extension: impl AsRef<Path>) {
     };
 }
 
-pub fn create_index(bam_path: &PathBuf) -> () {
+pub fn create_index(bam_path: &PathBuf) {
     let mut csi = PathBuf::from(bam_path);
     add_extension(&mut csi, "csi");
     if Path::new(&csi).exists() {
@@ -52,13 +52,12 @@ pub fn open_bam(
         &Some(_) => bam_path.as_ref().unwrap(),
     };
     if make_index {
-        create_index(&bam_cram_path);
+        create_index(bam_cram_path);
     }
-    let bam = IndexedReader::from_path(&bam_cram_path).unwrap();
-    bam
+    IndexedReader::from_path(bam_cram_path).unwrap()
 }
 
-pub fn reads_from_bam<F: Fn() -> ()>(
+pub fn reads_from_bam<F: Fn()>(
     seq_names: &HashSet<Vec<u8>>,
     mut bam: IndexedReader,
     callback: &Option<F>,
@@ -68,9 +67,8 @@ pub fn reads_from_bam<F: Fn() -> ()>(
     let progress_bar = styled_progress_bar(total, "Locating alignments");
 
     for seq_name in seq_names {
-        match bam.fetch(seq_name) {
-            Err(_) => eprintln!("Sequence {:?} not found in BAM file", seq_name),
-            Ok(_) => (),
+        if bam.fetch(seq_name).is_err() {
+            eprintln!("Sequence {:?} not found in BAM file", seq_name)
         }
 
         for read in bam
@@ -108,7 +106,7 @@ fn seq_lengths_from_header(
     for (_, records) in header.to_hashmap() {
         for record in records {
             if record.contains_key("SN") {
-                if seq_names.len() > 0 && !seq_names.contains(&record["SN"].as_bytes().to_vec()) {
+                if !seq_names.is_empty() && !seq_names.contains(&record["SN"].as_bytes().to_vec()) {
                     continue;
                 }
                 seq_lengths
@@ -179,27 +177,24 @@ fn depth_to_bed(
     let mut start = 0;
     let mut end;
     let bin_count = bins.len();
-    for i in 0..bin_count {
+    for bin in bins.iter().take(bin_count) {
         end = start + step;
         if end > seq_length {
             end = seq_length;
         }
-        let line = format!("{}\t{}\t{}\t{:.2}", seq_name, start, end, bins[i]);
-        match writeln!(writer, "{}", line) {
-            Err(err) => return Err(err),
-            Ok(_) => (),
-        };
+        let line = format!("{}\t{}\t{}\t{:.2}", seq_name, start, end, bin);
+        writeln!(writer, "{}", line)?;
         start = end;
     }
     Ok(())
 }
 
-pub fn bed_from_bam<F: Fn() -> ()>(
+pub fn bed_from_bam<F: Fn()>(
     seq_lengths: &IndexMap<String, usize>,
     mut bam: IndexedReader,
     options: &DepthOptions,
     callback: &Option<F>,
-) -> () {
+) {
     let total = seq_lengths.len();
     let progress_bar = styled_progress_bar(total, "Locating alignments");
     let bin_size = options.bin_size;
@@ -210,9 +205,8 @@ pub fn bed_from_bam<F: Fn() -> ()>(
         for _ in (0..length).step_by(step) {
             raw_cov.push(0)
         }
-        match bam.fetch(&seq_name) {
-            Err(_) => eprintln!("Sequence {:?} not found in BAM file", seq_name),
-            Ok(_) => (),
+        if bam.fetch(&seq_name).is_err() {
+            eprintln!("Sequence {:?} not found in BAM file", seq_name)
         }
         for p in bam.pileup() {
             let pileup = p.unwrap();
@@ -255,7 +249,7 @@ fn depth_to_cov(raw_cov: Vec<usize>, length: &usize, step: usize, seq_name: &Str
     }
 }
 
-pub fn depth_from_bam<F: Fn() -> ()>(
+pub fn depth_from_bam<F: Fn()>(
     seq_lengths: &IndexMap<String, usize>,
     mut bam: IndexedReader,
     options: &DepthOptions,
@@ -271,9 +265,8 @@ pub fn depth_from_bam<F: Fn() -> ()>(
         for _ in (0..length).step_by(step) {
             raw_cov.push(0)
         }
-        match bam.fetch(&seq_name) {
-            Err(_) => eprintln!("Sequence {:?} not found in BAM file", seq_name),
-            Ok(_) => (),
+        if bam.fetch(&seq_name).is_err() {
+            eprintln!("Sequence {:?} not found in BAM file", seq_name)
         }
         for p in bam.pileup() {
             let pileup = p.unwrap();
@@ -296,22 +289,22 @@ pub fn depth_from_bam<F: Fn() -> ()>(
     binned_covs
 }
 
-pub fn get_bed_file<F: Fn() -> ()>(
+pub fn get_bed_file<F: Fn()>(
     bam: IndexedReader,
     seq_names: &HashSet<Vec<u8>>,
     options: &DepthOptions,
     callback: &Option<F>,
-) -> () {
-    let seq_lengths = seq_lengths_from_header(&bam, &seq_names);
+) {
+    let seq_lengths = seq_lengths_from_header(&bam, seq_names);
     bed_from_bam(&seq_lengths, bam, options, callback);
 }
 
-pub fn get_depth<F: Fn() -> ()>(
+pub fn get_depth<F: Fn()>(
     bam: IndexedReader,
     seq_names: &HashSet<Vec<u8>>,
     options: &DepthOptions,
     callback: &Option<F>,
 ) -> Vec<BinnedCov> {
-    let seq_lengths = seq_lengths_from_header(&bam, &seq_names);
+    let seq_lengths = seq_lengths_from_header(&bam, seq_names);
     depth_from_bam(&seq_lengths, bam, options, callback)
 }

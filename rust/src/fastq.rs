@@ -10,11 +10,10 @@ use crate::io::get_writer;
 use crate::utils::styled_progress_bar;
 
 pub fn open_fastx(fastx_path: &Option<PathBuf>) -> Option<Box<dyn FastxReader>> {
-    let reader = match fastx_path {
-        None => None,
-        &Some(_) => Some(parse_fastx_file(&fastx_path.as_ref().unwrap()).expect("valid path/file")),
-    };
-    return reader;
+    let reader = fastx_path
+        .as_ref()
+        .map(|_| parse_fastx_file(fastx_path.as_ref().unwrap()).expect("valid path/file"));
+    reader
 }
 
 fn trim_read_id(input: &[u8]) -> Vec<u8> {
@@ -26,7 +25,7 @@ fn trim_read_id(input: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-fn subsample_paired<F: Fn() -> ()>(
+fn subsample_paired<F: Fn()>(
     read_names: &HashSet<Vec<u8>>,
     mut reader: Box<dyn FastxReader>,
     mut paired_reader: Box<dyn FastxReader>,
@@ -54,7 +53,7 @@ fn subsample_paired<F: Fn() -> ()>(
         if read_names.contains(&seq_id) || read_names.contains(&paired_id) {
             seq_id.extend(&read_suffix[0]);
             write_fastq(
-                &seqrec.id(),
+                seqrec.id(),
                 &seqrec.seq(),
                 seqrec.qual(),
                 writer,
@@ -63,7 +62,7 @@ fn subsample_paired<F: Fn() -> ()>(
             .expect("Unable to write FASTQ");
             paired_id.extend(&read_suffix[1]);
             write_fastq(
-                &paired_seqrec.id(),
+                paired_seqrec.id(),
                 &paired_seqrec.seq(),
                 paired_seqrec.qual(),
                 paired_writer,
@@ -83,7 +82,7 @@ fn subsample_paired<F: Fn() -> ()>(
     progress_bar.finish();
 }
 
-fn subsample_single<F: Fn() -> ()>(
+fn subsample_single<F: Fn()>(
     read_names: &HashSet<Vec<u8>>,
     mut reader: Box<dyn FastxReader>,
     writer: &mut dyn Write,
@@ -99,7 +98,7 @@ fn subsample_single<F: Fn() -> ()>(
         if read_names.contains(&seq_id) {
             seq_id.extend(&read_suffix[0]);
             write_fastq(
-                &seqrec.id(),
+                seqrec.id(),
                 &seqrec.seq(),
                 seqrec.qual(),
                 writer,
@@ -156,15 +155,15 @@ fn set_read_suffix(read_names: &HashSet<Vec<u8>>) -> [Vec<u8>; 2] {
     [vec![b'/', b'1'], vec![b'/', b'2']]
 }
 
-pub fn subsample<F: Fn() -> ()>(
+pub fn subsample<F: Fn()>(
     read_names: &HashSet<Vec<u8>>,
     fastq_path_1: &Option<PathBuf>,
     fastq_path_2: &Option<PathBuf>,
     fastq_out: &bool,
     suffix: &String,
     callback: &Option<F>,
-) -> () {
-    if let None = fastq_path_1 {
+) {
+    if fastq_path_1.is_none() {
         return;
     }
     if !fastq_out {
@@ -173,27 +172,21 @@ pub fn subsample<F: Fn() -> ()>(
     let reader = open_fastx(fastq_path_1);
     let paired_reader = open_fastx(fastq_path_2);
     let read_suffix = set_read_suffix(read_names);
-    let out_path = suffix_file_name(fastq_path_1.as_ref().unwrap(), &suffix);
+    let out_path = suffix_file_name(fastq_path_1.as_ref().unwrap(), suffix);
     let mut writer = get_writer(&Some(out_path));
-    if let Some(_) = paired_reader {
-        let paired_out_path = suffix_file_name(fastq_path_2.as_ref().unwrap(), &suffix);
+    if let Some(pr) = paired_reader {
+        let paired_out_path = suffix_file_name(fastq_path_2.as_ref().unwrap(), suffix);
         let mut paired_writer = get_writer(&Some(paired_out_path));
         subsample_paired(
             read_names,
             reader.unwrap(),
-            paired_reader.unwrap(),
+            pr,
             &mut *writer,
             &mut *paired_writer,
             &read_suffix,
-            &callback,
+            callback,
         );
-    } else if let Some(_) = reader {
-        subsample_single(
-            read_names,
-            reader.unwrap(),
-            &mut *writer,
-            &read_suffix,
-            &callback,
-        );
+    } else if let Some(r) = reader {
+        subsample_single(read_names, r, &mut *writer, &read_suffix, callback);
     }
 }

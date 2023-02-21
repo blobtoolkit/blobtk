@@ -58,7 +58,7 @@ pub fn get_list(file_path: &Option<PathBuf>) -> HashSet<Vec<u8>> {
 }
 
 pub fn get_file_writer(file_path: &PathBuf) -> Box<dyn Write> {
-    let file = match File::create(&file_path) {
+    let file = match File::create(file_path) {
         Err(why) => panic!("couldn't open {}: {}", file_path.display(), why),
         Ok(file) => file,
     };
@@ -86,11 +86,8 @@ pub fn get_writer(file_path: &Option<PathBuf>) -> Box<dyn Write> {
 
 pub fn write_list(entries: &HashSet<Vec<u8>>, file_path: &Option<PathBuf>) -> Result<()> {
     let mut writer = get_writer(file_path);
-    for line in entries.into_iter() {
-        match writeln!(&mut writer, "{}", String::from_utf8(line.to_vec()).unwrap()) {
-            Err(err) => return Err(err),
-            Ok(_) => (),
-        };
+    for line in entries.iter() {
+        writeln!(&mut writer, "{}", String::from_utf8(line.to_vec()).unwrap())?;
     }
     Ok(())
 }
