@@ -38,6 +38,7 @@ fn bin_size_parser(s: &str) -> Result<usize, String> {
     Ok(val)
 }
 
+/// Top level arguments to `blobtk`
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct Arguments {
@@ -45,14 +46,53 @@ pub struct Arguments {
     pub cmd: SubCommand,
 }
 
+/// `blobtk` subcommands
 #[derive(Subcommand, Debug)]
 pub enum SubCommand {
-    /// Filter files based on list of sequence names
-    Filter(FilterOptions),
-    /// Calculate sequencing coverage depth
+    /// Calculate sequencing coverage depth.
+    /// Called as `blobtk depth`
     Depth(DepthOptions),
+    /// Filter files based on list of sequence names.
+    /// Called as `blobtk filter`
+    Filter(FilterOptions),
 }
 
+/// Options to pass to `blobtk depth`
+#[derive(Parser, Debug)]
+#[command(group(
+    ArgGroup::new("alignment")
+        .required(false)
+        .args(["bam", "cram"]),
+))]
+#[pyclass]
+pub struct DepthOptions {
+    /// List of sequence IDs
+    #[clap(skip)]
+    pub list: Option<HashSet<Vec<u8>>>,
+    /// Path to input file containing a list of sequence IDs
+    #[arg(long = "list", short = 'i', value_name = "TXT")]
+    pub list_file: Option<PathBuf>,
+    /// Path to BAM file
+    #[arg(long, short = 'b')]
+    pub bam: Option<PathBuf>,
+    /// Path to CRAM file
+    #[arg(long, short = 'c', requires = "fasta")]
+    pub cram: Option<PathBuf>,
+    /// Path to assembly FASTA input file (required for CRAM)
+    #[arg(long, short = 'a')]
+    pub fasta: Option<PathBuf>,
+    /// Bin size for coverage calculations (use 0 for full contig length)
+    #[arg(long = "bin-size", short = 's', default_value_t = 0, value_parser = bin_size_parser)]
+    pub bin_size: usize,
+    // /// Window size for coverage calculations size
+    // #[arg(long = "window-size", short = 'w', num_args(1..), default_values_t = [1.0], value_parser = window_size_range, action = clap::ArgAction::Append)]
+    // pub window_size: Vec<f64>,
+    /// Output bed file name
+    #[arg(long = "bed", short = 'O', value_name = "BED")]
+    pub bed: Option<PathBuf>,
+}
+
+/// Options to pass to `blobtk filter`
 #[derive(Parser, Debug)]
 #[command(group(
     ArgGroup::new("alignment")
@@ -112,40 +152,7 @@ pub struct FilterOptions {
     pub read_list: Option<PathBuf>,
 }
 
-#[derive(Parser, Debug)]
-#[command(group(
-    ArgGroup::new("alignment")
-        .required(false)
-        .args(["bam", "cram"]),
-))]
-#[pyclass]
-pub struct DepthOptions {
-    /// List of sequence IDs
-    #[clap(skip)]
-    pub list: Option<HashSet<Vec<u8>>>,
-    /// Path to input file containing a list of sequence IDs
-    #[arg(long = "list", short = 'i', value_name = "TXT")]
-    pub list_file: Option<PathBuf>,
-    /// Path to BAM file
-    #[arg(long, short = 'b')]
-    pub bam: Option<PathBuf>,
-    /// Path to CRAM file
-    #[arg(long, short = 'c', requires = "fasta")]
-    pub cram: Option<PathBuf>,
-    /// Path to assembly FASTA input file (required for CRAM)
-    #[arg(long, short = 'a')]
-    pub fasta: Option<PathBuf>,
-    /// Bin size for coverage calculations (use 0 for full contig length)
-    #[arg(long = "bin-size", short = 's', default_value_t = 0, value_parser = bin_size_parser)]
-    pub bin_size: usize,
-    // /// Window size for coverage calculations size
-    // #[arg(long = "window-size", short = 'w', num_args(1..), default_values_t = [1.0], value_parser = window_size_range, action = clap::ArgAction::Append)]
-    // pub window_size: Vec<f64>,
-    /// Output bed file name
-    #[arg(long = "bed", short = 'O', value_name = "BED")]
-    pub bed: Option<PathBuf>,
-}
-
+/// Command line argument parser
 pub fn parse() -> Arguments {
     Arguments::parse()
 }

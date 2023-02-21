@@ -1,3 +1,7 @@
+//!
+//! Invoked by calling:
+//! `blobtk filter <args>`
+
 use std::error::Error;
 use std::io::ErrorKind;
 
@@ -7,6 +11,11 @@ use crate::fasta;
 use crate::fastq;
 use crate::io;
 
+pub use cli::FilterOptions;
+
+/// Execute the `filter` subcommand from `blobtk`.
+/// Pass a list of sequence names and a BAM file to generate
+/// a list of read names and filtered FASTA/FASTQ files.
 pub fn filter(options: &cli::FilterOptions) -> Result<(), Box<dyn Error>> {
     let seq_names = io::get_list(&options.list_file);
     if seq_names.len() == 0 {
@@ -38,23 +47,4 @@ pub fn filter(options: &cli::FilterOptions) -> Result<(), Box<dyn Error>> {
         Ok(_) => (),
     };
     Ok(())
-}
-
-pub fn bam_to_bed(options: &cli::DepthOptions) -> Result<(), Box<dyn Error>> {
-    let seq_names = io::get_list(&options.list_file);
-    let bam = bam::open_bam(&options.bam, &options.cram, &options.fasta, true);
-    bam::get_bed_file(
-        bam,
-        &seq_names,
-        &options,
-        &None as &Option<Box<dyn Fn() -> ()>>,
-    );
-    Ok(())
-}
-
-pub fn cmd(args: cli::Arguments) -> Result<(), Box<dyn Error>> {
-    match args.cmd {
-        cli::SubCommand::Filter(options) => filter(&options),
-        cli::SubCommand::Depth(options) => bam_to_bed(&options),
-    }
 }
