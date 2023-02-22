@@ -7,14 +7,32 @@ if [ -z "$LEVEL" ]; then
   exit 1;
 fi
 
-if [ ! -z "$(git status --porcelain)" ]; then
-  echo "Commit changes before running this script"
-  #exit 1;
-fi
-
 CURRENT_VERSION=$(grep current_version .bumpversion.cfg | head -n 1 | cut -d' ' -f 3)
 
 cd rust &&
+
+./test/integration.sh
+
+if [ $? != "0" ]; then
+  cd -
+  echo "failed integration tests"
+  exit 1
+fi
+
+echo "Passed all tests"
+echo
+
+if [ "$LEVEL" == "test" ]; then
+  cd -
+  exit
+fi
+
+cd -
+
+if [ ! -z "$(git status --porcelain)" ]; then
+  echo "Commit changes before running bumping version"
+  exit 1;
+fi
 
 cargo bump $LEVEL &&
 

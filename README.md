@@ -2,7 +2,7 @@
 
 ## About
 
-BlobTk contains a set of core functions used by BlobToolKit tools. Implemented in Rust, these functions are intended to be accessible from the command line, as python modules and web assembly code for use in javascript.
+BlobTk contains a set of core functions used by BlobToolKit tools. Implemented in Rust, these functions are intended to be accessible from the command line, as python modules and will include web assembly code for use in javascript.
 
 ## Installing
 
@@ -26,7 +26,7 @@ chmod 755 blobtk
 
 ### Python module
 
-The python can be installed using pip:
+The python module can be installed using pip:
 
 ```
 pip install blobtk
@@ -35,6 +35,32 @@ pip install blobtk
 ## Usage
 
 ### Command line tool
+
+#### `blobtk depth`
+
+```
+blobtk depth --help
+Calculate sequencing coverage depth
+
+Usage: blobtk depth [OPTIONS]
+
+Options:
+  -i, --list <TXT>           Path to input file containing a list of sequence IDs
+  -b, --bam <BAM>            Path to BAM file
+  -c, --cram <CRAM>          Path to CRAM file
+  -a, --fasta <FASTA>        Path to assembly FASTA input file (required for CRAM)
+  -s, --bin-size <BIN_SIZE>  Bin size for coverage calculations (use 0 for full contig length) [default: 1000]
+  -O, --bed <BED>            Output bed file name
+  -h, --help                 Print help information
+```
+
+```
+blobtk depth -b test/test.bam -O test/test.bed
+
+blobtk depth -b test/test.bam -s 1000 -O test/test.1000.bed
+```
+
+#### `blobtk filter`
 
 ```
 ./blobtk filter --help
@@ -60,38 +86,9 @@ Options:
 blobtk filter -i test/test.list -b test/test.bam -f test/reads_1.fq.gz -r test/reads_2.fq.gz -F
 ```
 
-```
-blobtk depth --help
-Calculate sequencing coverage depth
-
-Usage: blobtk depth [OPTIONS]
-
-Options:
-  -i, --list <TXT>           Path to input file containing a list of sequence IDs
-  -b, --bam <BAM>            Path to BAM file
-  -c, --cram <CRAM>          Path to CRAM file
-  -a, --fasta <FASTA>        Path to assembly FASTA input file (required for CRAM)
-  -s, --bin-size <BIN_SIZE>  Bin size for coverage calculations (use 0 for full contig length) [default: 1000]
-  -O, --bed <BED>            Output bed file name
-  -h, --help                 Print help information
-```
-
-```
-blobtk depth -b test/test.bam -O test/test.bed
-
-blobtk depth -b test/test.bam -s 1000 -O test/test.1000.bed
-```
-
 ### Python module
 
-```
-from blobtk import filter
-
-# filter fastq files based on a list of sequence names
-read_count = filter.fastx(list_file="test/test.list", bam="test/test.bam", fastq1="test/reads_1.fq.gz", fastq2="test/reads_2.fq.gz", fastq_out=True)
-
-print(read_count)
-```
+#### depth
 
 ```
 from blobtk import depth
@@ -105,4 +102,15 @@ for cov in binned_covs:
     print({cov.seq_name: cov.bins[0]})
 
 
+```
+
+#### filter
+
+```
+from blobtk import filter
+
+# filter fastq files based on a list of sequence names
+read_count = filter.fastx(list_file="test/test.list", bam="test/test.bam", fastq1="test/reads_1.fq.gz", fastq2="test/reads_2.fq.gz", fastq_out=True)
+
+print(read_count)
 ```
