@@ -27,9 +27,8 @@ if [ "$LEVEL" == "test" ]; then
   exit
 fi
 
-cd -
-
 if [ ! -z "$(git status --porcelain)" ]; then
+  cd -
   echo "Commit changes before running bumping version"
   exit 1;
 fi
