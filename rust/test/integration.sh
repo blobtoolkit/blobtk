@@ -2,6 +2,10 @@
 
 echo "Runnning integration tests"
 
+CMD="cargo build --release"
+printf "\nrunning command\n$CMD\n\n"
+$CMD || exit 1
+
 CMD="./target/release/blobtk depth -b test/test.bam -O test/test.bed"
 printf "\nrunning command\n$CMD\n\n"
 $CMD || exit 1
@@ -13,6 +17,16 @@ $CMD || exit 1
 CMD="./target/release/blobtk filter -i test/test.list -b test/test.bam -f test/reads_1.fq.gz -r test/reads_2.fq.gz -F"
 printf "\n\nrunning command\n$CMD\n\n"
 $CMD || exit 1
+
+CMD="rm -f ./target/wheels/blobtk-*.whl && 
+    maturin build --release &&
+    yes | pip uninstall blobtk &&
+    yes | pip install ./target/wheels/blobtk-*.whl"
+printf "\nrunning command\n$CMD\n\n"
+rm -f ./target/wheels/blobtk-*.whl &&
+    maturin build --release &&
+    yes | pip uninstall blobtk &&
+    yes | pip install ./target/wheels/blobtk-*.whl || exit 1
 
 CMD="./test/depth.py"
 printf "\n\nrunning command\n$CMD\n\n"
