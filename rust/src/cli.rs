@@ -76,7 +76,7 @@ pub struct DepthOptions {
     #[arg(long, short = 'b')]
     pub bam: Option<PathBuf>,
     /// Path to CRAM file
-    #[arg(long, short = 'c', requires = "fasta")]
+    #[arg(long, short = 'c')]
     pub cram: Option<PathBuf>,
     /// Path to assembly FASTA input file (required for CRAM)
     #[arg(long, short = 'a')]

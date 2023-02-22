@@ -44,7 +44,7 @@ pub fn create_index(bam_path: &PathBuf) {
 pub fn open_bam(
     bam_path: &Option<PathBuf>,
     cram_path: &Option<PathBuf>,
-    _fasta_path: &Option<PathBuf>,
+    fasta_path: &Option<PathBuf>,
     make_index: bool,
 ) -> IndexedReader {
     let bam_cram_path = match bam_path {
@@ -54,7 +54,11 @@ pub fn open_bam(
     if make_index {
         create_index(bam_cram_path);
     }
-    IndexedReader::from_path(bam_cram_path).unwrap()
+    let mut reader = IndexedReader::from_path(bam_cram_path).unwrap();
+    if cram_path.is_some() && fasta_path.is_some() {
+        reader.set_reference(fasta_path.as_ref().unwrap()).unwrap();
+    }
+    reader
 }
 
 pub fn reads_from_bam<F: Fn()>(
