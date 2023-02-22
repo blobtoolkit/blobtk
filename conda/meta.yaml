@@ -1,0 +1,51 @@
+{% set version = "0.2.2" %}
+
+package:
+  name: blobtk
+  version: {{ version }}
+
+build:
+  number: 0
+
+source:
+  url: https://github.com/blobtoolkit/blobtk/archive/{{ version }}.tar.gz
+  sha256: 3796836ad49dcb740bb5f89887a523ace0dcce0df194b584975bb5c16cd70581
+
+requirements:
+  build:
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+    - cmake
+    - make
+    - rust >=1.52
+    - pkg-config # [osx]
+    - python >=3.8
+    - pip
+  host:
+    - openssl
+  run:
+    - python >=3.8
+    
+
+test:
+  commands:
+    # - python -c 'from blobtk import depth'
+    # - python -c 'from blobtk import filter'
+    - blobtk --help
+    - blobtk --version
+    - blobtk depth --help
+    - blobtk filter --help
+
+
+  # imports:
+  #   - blobtk
+
+about:
+  home: https://github.com/blobtoolkit/blobtk
+  license: MIT
+  license_file: LICENSE
+  summary: |
+    Core utilities for BlobToolKit.
+  description: |
+    A collection of general purpose command line tools optimised for use cases encoutered in analyses for BlobToolKit.
+    Includes tools for FASTA/FASTQ filtering and sequencing coverage depth calculation.
