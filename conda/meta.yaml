@@ -20,6 +20,7 @@ requirements:
     - {{ compiler('cxx') }}
     - cmake
     - make
+    - openssl
     - perl
     - rust >=1.52
     - pkg-config # [osx]
