@@ -24,6 +24,7 @@ requirements:
     - pkg-config # [osx]
     - python {{ python }}
   host:
+    - openssl
     - python {{ python }}
     - pip
   run:
