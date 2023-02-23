@@ -14,10 +14,7 @@ jobs:
         run: |
           mkdir -p ./dist
           cd ./dist
-          curl  -L https://pypi.python.org/pypi/blobtk/json | jq -r '.releases["0.2.4"] | map(.url) | map(select(test("10_7") | not))' | \
-          while read URL; do
-            wget $URL
-          done
+          curl -L https://pypi.python.org/pypi/blobtk/json | jq -r '.releases["0.2.4"] | map(.url) | map(select(test("10_7") | not)) | .[]' | while read URL; do wget $URL; done
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
