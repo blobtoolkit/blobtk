@@ -20,11 +20,11 @@ requirements:
     - {{ compiler('cxx') }}
     - cmake
     - make
+    - perl
     - rust >=1.52
-    - pkg-config
+    - pkg-config # [osx]
     - python {{ python }}
   host:
-    - openssl
     - python {{ python }}
     - pip
   run:
