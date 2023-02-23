@@ -43,6 +43,7 @@ jobs:
       - name: conda build
         run: |
           conda install -y conda-build
+          conda config --set anaconda_upload yes
           ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
           conda build ./conda
 
@@ -64,5 +65,6 @@ jobs:
       - name: conda build
         run: |
           conda install -y conda-build
+          conda config --set anaconda_upload yes
           ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
           conda build ./conda
