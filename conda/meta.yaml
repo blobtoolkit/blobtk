@@ -21,7 +21,8 @@ requirements:
     - cmake
     - make
     - rust >=1.52
-    - pkg-config # [osx]
+    - openssl
+    - pkg-config
     - python {{ python }}
   host:
     - openssl
