@@ -1,4 +1,4 @@
-{% set version = "0.2.2" %}
+{% set version = "0.2.3" %}
 
 package:
   name: blobtk
@@ -8,8 +8,11 @@ build:
   number: 0
 
 source:
-  url: https://github.com/blobtoolkit/blobtk/archive/{{ version }}.tar.gz
-  sha256: 3796836ad49dcb740bb5f89887a523ace0dcce0df194b584975bb5c16cd70581
+  git_url: https://github.com/blobtoolkit/blobtk.git
+  git_rev: {{ version }}
+  # git_depth: 1
+  # url: https://github.com/blobtoolkit/blobtk/archive/{{ version }}.tar.gz
+  # sha256: 1d62bce3232ab6afc8ab07c53c559d8d991657f917ddd00e3dbe6938bc881fa1
 
 requirements:
   build:
@@ -19,26 +22,24 @@ requirements:
     - make
     - rust >=1.52
     - pkg-config # [osx]
-    - python >=3.8
-    - pip
+    - python {{ python }}
   host:
-    - openssl
+    - python {{ python }}
+    - pip
   run:
-    - python >=3.8
+    - python {{ python }}
     
 
 test:
   commands:
-    # - python -c 'from blobtk import depth'
-    # - python -c 'from blobtk import filter'
     - blobtk --help
     - blobtk --version
     - blobtk depth --help
     - blobtk filter --help
 
 
-  # imports:
-  #   - blobtk
+  imports:
+    - blobtk
 
 about:
   home: https://github.com/blobtoolkit/blobtk
