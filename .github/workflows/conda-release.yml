@@ -34,8 +34,8 @@ jobs:
           sudo apt-get install -y musl-tools
           rustup target add x86_64-unknown-linux-musl
           cargo build --target=x86_64-unknown-linux-musl --release
-          ls target/*
-          ls -al ../dist
+          ls target/x86_64-unknown-linux-musl/release
+          mv target/x86_64-unknown-linux-musl/release/blobtk ../dist/blobtk-linux
       - name: Upload binaries
         uses: actions/upload-artifact@v3
         with:
