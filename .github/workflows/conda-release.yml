@@ -89,8 +89,8 @@ jobs:
         with:
           name: wheels
           path: ./dist
-      - name: Install libssl-dev
-        run: sudo apt-get install -y libssl-dev pkg-config
+      # - name: Install libssl-dev
+      #   run: sudo apt-get install -y libssl-dev pkg-config
       - name: copy files
         run: |
           mkdir -p ./conda/dist
