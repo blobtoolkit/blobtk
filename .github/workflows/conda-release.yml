@@ -20,6 +20,17 @@ jobs:
         with:
           name: wheels
           path: dist
+      - name: fetch binaries
+        run: |
+          mkdir -p ./dist
+          cd ./dist
+          curl -L https://github.com/blobtoolkit/blobtk/releases/download/0.2.4/blobtk-linux > blobtk-linux
+          curl -L https://github.com/blobtoolkit/blobtk/releases/download/0.2.4/blobtk-macos > blobtk-macos
+      - name: Upload binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: dist
 
   create-conda-release-macos:
     name: Create conda release Mac
