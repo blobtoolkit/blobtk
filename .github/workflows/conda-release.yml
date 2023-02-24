@@ -32,41 +32,68 @@ jobs:
           name: binaries
           path: dist
 
-  create-conda-release-macos:
-    name: Create conda release Mac
-    runs-on: macos-latest
-    #if: "startsWith(github.ref, 'refs/tags/')"
-    needs: [fetch-wheels, create-conda-release-linux]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
-        with:
-          auto-update-conda: true
-          python-version: ${{ matrix.python-version }}
-      - uses: actions/download-artifact@v3
-        with:
-          name: binaries
-          path: ./dist
-      - uses: actions/download-artifact@v3
-        with:
-          name: wheels
-          path: ./dist
-      - name: copy files
-        run: |
-          mkdir -p ./conda/dist
-          cp ./dist/*macos*.whl ./conda/dist/
-          cp ./dist/blobtk-macos ./conda/dist/blobtk
-      - name: conda build
-        run: |
-          conda install -y conda-build
-          conda config --set anaconda_upload yes
-          ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
-          conda build ./conda
+  # create-conda-release-macos:
+  #   name: Create conda release Mac
+  #   runs-on: macos-latest
+  #   #if: "startsWith(github.ref, 'refs/tags/')"
+  #   needs: [fetch-wheels, create-conda-release-linux]
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: conda-incubator/setup-miniconda@v2
+  #       with:
+  #         auto-update-conda: true
+  #         python-version: ${{ matrix.python-version }}
+  #     - uses: actions/download-artifact@v3
+  #       with:
+  #         name: binaries
+  #         path: ./dist
+  #     - uses: actions/download-artifact@v3
+  #       with:
+  #         name: wheels
+  #         path: ./dist
+  #     - name: copy files
+  #       run: |
+  #         mkdir -p ./conda/dist
+  #         cp ./dist/*macos*.whl ./conda/dist/
+  #         cp ./dist/blobtk-macos ./conda/dist/blobtk
+  #     - name: conda build
+  #       run: |
+  #         conda install -y conda-build
+  #         conda config --set anaconda_upload yes
+  #         ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
+  #         conda build ./conda
 
-  create-conda-release-linux:
-    name: Create conda release Linux
+  # create-conda-release-linux:
+  #   name: Create conda release Linux
+  #   runs-on: ubuntu-latest
+  #   #if: "startsWith(github.ref, 'refs/tags/')"
+  #   needs: fetch-wheels
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: actions/download-artifact@v3
+  #       with:
+  #         name: binaries
+  #         path: ./dist
+  #     - uses: actions/download-artifact@v3
+  #       with:
+  #         name: wheels
+  #         path: ./dist
+  #     - name: Install libssl-dev
+  #       run: sudo apt-get install -y libssl-dev pkg-config
+  #     - name: copy files
+  #       run: |
+  #         mkdir -p ./conda/dist
+  #         cp ./dist/*linux*.whl ./conda/dist/
+  #         cp ./dist/blobtk-linux ./conda/dist/blobtk
+  #     - name: conda build
+  #       run: |
+  #         conda install -y conda-build
+  #         conda config --set anaconda_upload yes
+  #         ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
+  #         conda build ./conda
+
+  publish:
     runs-on: ubuntu-latest
-    #if: "startsWith(github.ref, 'refs/tags/')"
     needs: fetch-wheels
     steps:
       - uses: actions/checkout@v3
@@ -85,9 +112,10 @@ jobs:
           mkdir -p ./conda/dist
           cp ./dist/*linux*.whl ./conda/dist/
           cp ./dist/blobtk-linux ./conda/dist/blobtk
-      - name: conda build
-        run: |
-          conda install -y conda-build
-          conda config --set anaconda_upload yes
-          ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
-          conda build ./conda
+      - name: publish-to-conda
+        uses: MichaelsJP/conda-package-publish-action@v1.0.0
+        with:
+          subDir: conda
+          AnacondaToken: ${{ secrets.ANACONDA_API_TOKEN }}
+          platforms: osx-64 linux-aarch64
+          override: true

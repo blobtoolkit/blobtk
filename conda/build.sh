@@ -9,12 +9,11 @@ fi
 
 # build binary with Rust
 #C_INCLUDE_PATH=$PREFIX/include OPENSSL_DIR=$PREFIX LIBRARY_PATH=$PREFIX/lib cargo install --path ./rust --root $PREFIX
-C_INCLUDE_PATH=$PREFIX/include LIBRARY_PATH=$PREFIX/lib cargo install --path ./rust --root $PREFIX
 
 # copy rust binary
-#mkdir -p $PREFIX/bin
-#cp $RECIPE_DIR/dist/blobtk $PREFIX/bin/blobtk
-#chmod 755 $PREFIX/bin/blobtk
+mkdir -p $PREFIX/bin
+cp $RECIPE_DIR/dist/blobtk $PREFIX/bin/blobtk
+chmod 755 $PREFIX/bin/blobtk
 
 
 # install python library from wheel
