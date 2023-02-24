@@ -97,10 +97,16 @@ jobs:
           cp ./dist/blobtk-linux ./conda/dist/blobtk
       - name: conda build
         run: |
-          conda install -y conda-build
+          conda install -y conda-build anaconda-client
           conda config --set anaconda_upload yes
-          ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
-          conda build ./conda
+          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
+          mkdir -p ./dist/linux-64
+          conda build --no-anaconda-upload ./conda --output-folder ./dist
+          ls ./dist/*
+      - name: conda upload
+        run: |
+          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
+          anaconda upload --force --label main ./dist/linux-64/*.tar.bz2
 
   # publish:
   #   runs-on: ubuntu-latest
