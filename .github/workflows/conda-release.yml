@@ -95,6 +95,10 @@ jobs:
           mkdir -p ./conda/dist
           cp ./dist/*linux*.whl ./conda/dist/
           cp ./dist/blobtk-linux ./conda/dist/blobtk
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-activate-base: true
+          activate-environment: ""
       - name: conda build
         run: |
           conda install -y conda-build
