@@ -36,6 +36,8 @@ flate2 = "1.0.25"
 indexmap = "1.9.2"
 indicatif = "0.17.2"
 needletail = "0.5.0"
+openssl = "0.10.45"
+openssl-sys = "0.9.80"
 pyo3 = { version = "0.18.1", features = ["extension-module"] }
 regex = "1.7.0"
 rust-htslib = "0.40.2"
