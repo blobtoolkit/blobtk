@@ -50,8 +50,8 @@ jobs:
     container: quay.io/pypa/manylinux2014_x86_64
     steps:
       - uses: actions/checkout@v3
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      # - name: Install Rust toolchain
+      #   uses: dtolnay/rust-toolchain@stable
       - name: Install Rust
         run: |
           curl --proto '=https' --tlsv1.2 --retry 10 -fsSL "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
