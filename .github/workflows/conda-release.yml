@@ -58,6 +58,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           source "$HOME/.cargo/env"
           rustup default stable
+          yum install -y python3.8
       - name: Build
         working-directory: ./rust
         run: |
