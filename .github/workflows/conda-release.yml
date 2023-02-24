@@ -56,6 +56,7 @@ jobs:
         run: |
           curl --proto '=https' --tlsv1.2 --retry 10 -fsSL "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
           echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> $GITHUB_PATH
+          rustup default stable
       - name: Build
         working-directory: ./rust
         run: |
