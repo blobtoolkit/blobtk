@@ -68,6 +68,7 @@ jobs:
       - name: Build
         working-directory: ./rust
         run: |
+          ls $HOME/*
           conda install -y python=3.8
           cargo build --release
           mv target/release/blobtk ../dist/blobtk-linux
