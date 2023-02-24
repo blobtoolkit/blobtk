@@ -79,6 +79,7 @@ jobs:
         working-directory: ./rust
         run: |
           cargo build --release
+          mkdir -p ../dist
           mv target/release/blobtk ../dist/blobtk-linux
       - name: Upload binaries
         uses: actions/upload-artifact@v3
