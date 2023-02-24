@@ -53,17 +53,18 @@ jobs:
       # - name: Install Rust toolchain
       #   uses: dtolnay/rust-toolchain@stable
 
-      - uses: conda-incubator/setup-miniconda@v2
-        with:
-          miniconda-version: latest
-          auto-activate-base: true
-          activate-environment: ""
       - name: Install Rust
         run: |
           curl --proto '=https' --tlsv1.2 --retry 10 -fsSL "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           source "$HOME/.cargo/env"
           rustup default stable
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniconda-version: latest
+          auto-activate-base: true
+          activate-environment: ""
+
       - name: Build
         working-directory: ./rust
         run: |
