@@ -22,10 +22,11 @@ requirements:
     - make
     - openssl
     - rust >=1.52
-    - pkg-config #[osx]
+    - pkg-config # [osx]
     - python {{ python }}
+    - sysroot_linux-64 2.17  # [linux64]
   host:
-    - openssl #[linux]
+    - openssl # [linux]
     - python {{ python }}
     - pip
   run:
