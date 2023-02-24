@@ -47,18 +47,18 @@ jobs:
   rebuild-rust:
     runs-on: ubuntu-latest
     needs: fetch-wheels
-    container: quay.io/pypa/manylinux2014_x86_64
+    container: ubuntu:16.04
     steps:
       - uses: actions/checkout@v3
-      # - name: Install Rust toolchain
-      #   uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Rust
-        run: |
-          curl --proto '=https' --tlsv1.2 --retry 10 -fsSL "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          source "$HOME/.cargo/env"
-          rustup default stable
+      # - name: Install Rust
+      #   run: |
+      #     curl --proto '=https' --tlsv1.2 --retry 10 -fsSL "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
+      #     echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      #     source "$HOME/.cargo/env"
+      #     rustup default stable
       - uses: conda-incubator/setup-miniconda@v2
         with:
           miniconda-version: latest
@@ -68,8 +68,6 @@ jobs:
       - name: Build
         working-directory: ./rust
         run: |
-          ls $HOME/*
-          conda install -y python=3.8
           cargo build --release
           mv target/release/blobtk ../dist/blobtk-linux
       - name: Upload binaries
