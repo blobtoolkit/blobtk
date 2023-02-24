@@ -26,6 +26,15 @@ jobs:
           cd ./dist
           curl -L https://github.com/blobtoolkit/blobtk/releases/download/0.2.4/blobtk-linux > blobtk-linux
           curl -L https://github.com/blobtoolkit/blobtk/releases/download/0.2.4/blobtk-macos > blobtk-macos
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        working-directory: ./rust
+        run: |
+          rustup target add x86_64-unknown-linux-musl
+          cargo build --target=x86_64-unknown-linux-musl --release
+          ls ./rust/target/release
+          mv ./rust/target/release/blobtk ./rust/target/release/blobtk-linux
       - name: Upload binaries
         uses: actions/upload-artifact@v3
         with:
