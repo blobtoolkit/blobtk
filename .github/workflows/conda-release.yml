@@ -64,10 +64,10 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           source "$HOME/.cargo/env"
           rustup default stable
-          conda install -y python=3.8
       - name: Build
         working-directory: ./rust
         run: |
+          conda install -y python=3.8
           cargo build --release
           mv target/release/blobtk ../dist/blobtk-linux
       - name: Upload binaries
