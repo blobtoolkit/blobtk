@@ -60,21 +60,12 @@ jobs:
           update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.6 1
           update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.8 2
           update-alternatives --set python3 /usr/bin/python3.8
-      # - name: Install Rust toolchain
-      #   uses: dtolnay/rust-toolchain@stable
-
       - name: Install Rust
         run: |
           curl --proto '=https' --tlsv1.2 --retry 10 -fsSL "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           . "$HOME/.cargo/env"
           rustup default stable
-      # - uses: conda-incubator/setup-miniconda@v2
-      #   with:
-      #     miniconda-version: latest
-      #     auto-activate-base: true
-      #     activate-environment: ""
-
       - name: Build
         working-directory: ./rust
         run: |
@@ -87,36 +78,36 @@ jobs:
           name: binaries
           path: dist
 
-  # create-conda-release-macos:
-  #   name: Create conda release Mac
-  #   runs-on: macos-latest
-  #   #if: "startsWith(github.ref, 'refs/tags/')"
-  #   needs: [fetch-wheels, create-conda-release-linux]
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - uses: conda-incubator/setup-miniconda@v2
-  #       with:
-  #         auto-update-conda: true
-  #         python-version: ${{ matrix.python-version }}
-  #     - uses: actions/download-artifact@v3
-  #       with:
-  #         name: binaries
-  #         path: ./dist
-  #     - uses: actions/download-artifact@v3
-  #       with:
-  #         name: wheels
-  #         path: ./dist
-  #     - name: copy files
-  #       run: |
-  #         mkdir -p ./conda/dist
-  #         cp ./dist/*macos*.whl ./conda/dist/
-  #         cp ./dist/blobtk-macos ./conda/dist/blobtk
-  #     - name: conda build
-  #       run: |
-  #         conda install -y conda-build
-  #         conda config --set anaconda_upload yes
-  #         ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
-  #         conda build ./conda
+  create-conda-release-macos:
+    name: Create conda release Mac
+    runs-on: macos-latest
+    #if: "startsWith(github.ref, 'refs/tags/')"
+    needs: [fetch-wheels, create-conda-release-linux]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/download-artifact@v3
+        with:
+          name: binaries
+          path: ./dist
+      - uses: actions/download-artifact@v3
+        with:
+          name: wheels
+          path: ./dist
+      - name: copy files
+        run: |
+          mkdir -p ./conda/dist
+          cp ./dist/*macos*.whl ./conda/dist/
+          cp ./dist/blobtk-macos ./conda/dist/blobtk
+      - name: conda build
+        run: |
+          conda install -y conda-build
+          conda config --set anaconda_upload yes
+          ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
+          conda build ./conda
 
   create-conda-release-linux:
     name: Create conda release Linux
@@ -159,31 +150,3 @@ jobs:
           conda install -y anaconda-client
           export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
           anaconda upload --force --label main ./dist/linux-64/*.tar.bz2
-
-  # publish:
-  #   runs-on: ubuntu-latest
-  #   needs: fetch-wheels
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - uses: actions/download-artifact@v3
-  #       with:
-  #         name: binaries
-  #         path: ./dist
-  #     - uses: actions/download-artifact@v3
-  #       with:
-  #         name: wheels
-  #         path: ./dist
-  #     - name: Install libssl-dev
-  #       run: sudo apt-get install -y libssl-dev pkg-config
-  #     - name: copy files
-  #       run: |
-  #         mkdir -p ./conda/dist
-  #         cp ./dist/*linux*.whl ./conda/dist/
-  #         cp ./dist/blobtk-linux ./conda/dist/blobtk
-  #     - name: publish-to-conda
-  #       uses: MichaelsJP/conda-package-publish-action@v1.0.0
-  #       with:
-  #         subDir: conda
-  #         AnacondaToken: ${{ secrets.ANACONDA_API_TOKEN }}
-  #         platforms: osx-64 linux-aarch64
-  #         override: true
