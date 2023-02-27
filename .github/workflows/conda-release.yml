@@ -105,9 +105,16 @@ jobs:
       - name: conda build
         run: |
           conda install -y conda-build
-          conda config --set anaconda_upload yes
-          ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
-          conda build ./conda
+          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
+          mkdir -p ./dist/osx-64
+          conda build --no-anaconda-upload ./conda --output-folder ./dist
+          ls ./dist/*
+      - name: conda upload
+        shell: bash -l {0}
+        run: |
+          conda install -y anaconda-client
+          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
+          anaconda upload --force --label main ./dist/osx-64/*.tar.bz2
 
   create-conda-release-linux:
     name: Create conda release Linux
