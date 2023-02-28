@@ -25,5 +25,8 @@ pub mod io;
 /// Python bindings.
 pub mod python;
 
+/// Parse and subset a taxonomy.
+pub mod taxonomy;
+
 /// Utility functions.
 pub mod utils;

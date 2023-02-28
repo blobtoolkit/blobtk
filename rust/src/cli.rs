@@ -55,6 +55,9 @@ pub enum SubCommand {
     /// Filter files based on list of sequence names.
     /// Called as `blobtk filter`
     Filter(FilterOptions),
+    /// Process a taxonomy and lookup lineages.
+    /// Called as `blobtk taxonomy`
+    Taxonomy(TaxonomyOptions),
 }
 
 /// Options to pass to `blobtk depth`
@@ -150,6 +153,18 @@ pub struct FilterOptions {
     /// Path to output list of read IDs
     #[arg(long = "read-list", short = 'O', value_name = "TXT")]
     pub read_list: Option<PathBuf>,
+}
+
+/// Options to pass to `blobtk taxonomy`
+#[derive(Parser, Debug)]
+#[pyclass]
+pub struct TaxonomyOptions {
+    /// Path to NCBI taxdump directory
+    #[arg(long, short = 't')]
+    pub taxdump: Option<PathBuf>,
+    /// Root taxon to build taxonomy for
+    #[arg(long = "root-id", short = 'r')]
+    pub root_id: Option<String>,
 }
 
 /// Command line argument parser
