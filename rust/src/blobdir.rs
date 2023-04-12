@@ -3,7 +3,8 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 use serde;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_aux::prelude::*;
 use serde_json;
 use url::Url;
 
@@ -61,7 +62,8 @@ pub struct TaxonMeta {
     pub order: Option<String>,
     pub phylum: Option<String>,
     pub superkingdom: Option<String>,
-    pub taxid: Option<String>,
+    #[serde(deserialize_with = "deserialize_string_from_number")]
+    pub taxid: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -99,7 +101,7 @@ pub struct BuscoGene {
     pub status: String,
 }
 
-pub fn parse_blobdir(options: &cli::PlotOptions) {
+pub fn parse_blobdir(options: &cli::PlotOptions) -> Meta {
     let mut blob_meta = options.blobdir.clone();
     blob_meta.push("meta.json");
     let file = File::open(blob_meta).expect("no such file");
@@ -107,10 +109,9 @@ pub fn parse_blobdir(options: &cli::PlotOptions) {
 
     let meta: Meta = serde_json::from_reader(reader).expect("unable to parse json");
 
-    // Do things just like with any other Rust data structure.
-    println!("dataset {} has {} records", meta.id, meta.records);
+    // println!("dataset {} has {} records", meta.id, meta.records);
 
-    // dbg!(meta);
+    meta
 }
 
 fn field_reader(id: &String, options: &cli::PlotOptions) -> BufReader<File> {
@@ -121,7 +122,7 @@ fn field_reader(id: &String, options: &cli::PlotOptions) -> BufReader<File> {
     reader
 }
 
-pub fn parse_field_busco(id: String, options: &cli::PlotOptions) {
+pub fn parse_field_busco(id: String, options: &cli::PlotOptions) -> Vec<Vec<BuscoGene>> {
     let reader = field_reader(&id, &options);
     let field: Field<Vec<(String, usize)>> =
         serde_json::from_reader(reader).expect("unable to parse json");
@@ -138,10 +139,10 @@ pub fn parse_field_busco(id: String, options: &cli::PlotOptions) {
         }
         values.push(val);
     }
-    dbg!(values);
+    values
 }
 
-pub fn parse_field_cat(id: String, options: &cli::PlotOptions) {
+pub fn parse_field_cat(id: String, options: &cli::PlotOptions) -> Vec<String> {
     let reader = field_reader(&id, &options);
     let field: Field<usize> = serde_json::from_reader(reader).expect("unable to parse json");
     let mut values: Vec<String> = vec![];
@@ -149,21 +150,21 @@ pub fn parse_field_cat(id: String, options: &cli::PlotOptions) {
     for value in field.values() {
         values.push(keys[*value].clone())
     }
-    dbg!(values);
+    values
 }
 
-pub fn parse_field_float(id: String, options: &cli::PlotOptions) {
+pub fn parse_field_float(id: String, options: &cli::PlotOptions) -> Vec<f64> {
     let reader = field_reader(&id, &options);
     let field: Field<f64> = serde_json::from_reader(reader).expect("unable to parse json");
-    let values = field.values();
-    dbg!(values);
+    let values = field.values().clone();
+    values
 }
 
-pub fn parse_field_int(id: String, options: &cli::PlotOptions) {
+pub fn parse_field_int(id: String, options: &cli::PlotOptions) -> Vec<usize> {
     let reader = field_reader(&id, &options);
     let field: Field<usize> = serde_json::from_reader(reader).expect("unable to parse json");
-    let values = field.values();
-    dbg!(values);
+    let values = field.values().clone();
+    values
 }
 
 pub fn parse_field_string(id: String, options: &cli::PlotOptions) {

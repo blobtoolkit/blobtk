@@ -176,6 +176,12 @@ pub struct PlotOptions {
     #[arg(long, short = 'v')]
     #[clap(value_enum)]
     pub view: Option<View>,
+    /// Output filename
+    #[arg(long, short = 'o', default_value_t = String::from("output.svg"))]
+    pub output: String,
+    /// Segment count for snail plot
+    #[arg(long, short = 's', default_value_t = 1000)]
+    pub segments: usize,
 }
 
 /// Options to pass to `blobtk taxonomy`
