@@ -2,6 +2,8 @@
 //! Invoked by calling:
 //! `blobtk taxonomy <args>`
 
+use std::collections::HashMap;
+
 use serde;
 use serde::{de::Error, Deserialize, Deserializer};
 
@@ -14,7 +16,7 @@ pub use cli::TaxonomyOptions;
 struct Name {
     pub tax_id: String,
     pub name: String,
-    pub class: String,
+    pub class: Option<String>,
 }
 
 impl<'de> Deserialize<'de> for Name {
@@ -36,11 +38,13 @@ impl<'de> Deserialize<'de> for Name {
             .parse()
             .map_err(D::Error::custom)?;
         parts.next();
-        let class = parts
+        let class: String = parts
             .next()
             .ok_or_else(|| D::Error::custom("missing class"))?
             .parse()
             .map_err(D::Error::custom)?;
+
+        let class = if class.is_empty() { Some(class) } else { None };
 
         Ok(Name {
             tax_id,
@@ -113,8 +117,8 @@ pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), Box<dyn std::error
         None => return Ok(()),
     };
 
-    let mut nodes = vec![];
-    let mut names = vec![];
+    let mut nodes = HashMap::new();
+    // let mut names = vec![];
 
     if let Ok(lines) = io::read_lines(nodes_file) {
         for line in lines {
@@ -126,7 +130,10 @@ pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), Box<dyn std::error
                         .as_str(),
                 );
                 match node {
-                    Ok(n) => nodes.push(n),
+                    Ok(n) => {
+                        nodes.insert(n.tax_id.clone(), n);
+                        ()
+                    }
                     Err(err) => eprintln!("{}", err),
                 }
             }
@@ -143,14 +150,25 @@ pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), Box<dyn std::error
                         .replace("\t\t", " , ")
                         .as_str(),
                 );
-                println!("{:?}", name);
-                match name {
-                    Ok(n) => names.push(n),
-                    Err(err) => eprintln!("{}", err),
-                }
+                // match name {
+                //     Ok(n) => {
+                //         match nodes.get(&n.tax_id) {
+                //             Some(node) => {
+                //                 // if n.class == Some(String::from("scientific name")) {
+                //                 //     node.scientific_name = Some(n.name);
+                //                 // }
+                //                 node.names.push(n);
+                //             }
+                //             None => (),
+                //         }
+                //         names.push(n)
+                //     }
+                //     Err(err) => eprintln!("{}", err),
+                // }
             }
         }
     }
+    println!("processed {} names", nodes.len());
     Ok(())
 }
 

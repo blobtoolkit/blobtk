@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use clap::{ArgGroup, Parser, Subcommand};
+use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 use pyo3::pyclass;
 
 // fn float_range(s: &str, min: f64, max: f64) -> Result<f64, String> {
@@ -55,6 +55,9 @@ pub enum SubCommand {
     /// Filter files based on list of sequence names.
     /// Called as `blobtk filter`
     Filter(FilterOptions),
+    /// Process a BlobDir and produce static plots.
+    /// Called as `blobtk plot`
+    Plot(PlotOptions),
     /// Process a taxonomy and lookup lineages.
     /// Called as `blobtk taxonomy`
     Taxonomy(TaxonomyOptions),
@@ -153,6 +156,26 @@ pub struct FilterOptions {
     /// Path to output list of read IDs
     #[arg(long = "read-list", short = 'O', value_name = "TXT")]
     pub read_list: Option<PathBuf>,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum View {
+    Blob,
+    Cumulative,
+    Snail,
+}
+
+/// Options to pass to `blobtk plot`
+#[derive(Parser, Debug)]
+#[pyclass]
+pub struct PlotOptions {
+    /// Path to BlobDir directory
+    #[arg(long, short = 'd')]
+    pub blobdir: PathBuf,
+    /// View to plot
+    #[arg(long, short = 'v')]
+    #[clap(value_enum)]
+    pub view: Option<View>,
 }
 
 /// Options to pass to `blobtk taxonomy`
