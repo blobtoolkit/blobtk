@@ -523,10 +523,12 @@ pub fn format_si(value: &f64, digits: u32) -> String {
     fn set_suffix(thousands: i8) -> String {
         const POSITIVE: [&str; 9] = ["", "k", "M", "G", "T", "P", "E", "Z", "Y"];
         const NEGATIVE: [&str; 9] = ["", "m", "μ", "p", "n", "f", "a", "z", "y"];
-        let suffix = if thousands < 0 {
+        let suffix = if thousands < 0 && thousands >= -9 {
             NEGATIVE[(thousands * -1) as usize]
-        } else {
+        } else if thousands >= 0 && thousands <= 9 {
             POSITIVE[thousands as usize]
+        } else {
+            ""
         };
         suffix.to_string()
     }
