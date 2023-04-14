@@ -12,11 +12,13 @@ use crate::snail;
 pub use cli::PlotOptions;
 
 pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
-    let busco_values = blobdir::parse_field_busco("eukaryota_odb10_busco".to_string(), &options);
-    let gc_values = blobdir::parse_field_float("gc".to_string(), &options);
-    let length_values = blobdir::parse_field_int("length".to_string(), &options);
+    // let busco_list = meta.busco_list.clone().unwrap();
+    let busco_field = meta.busco_list.clone().unwrap()[0].clone();
+    let busco_values = blobdir::parse_field_busco(busco_field, &options).unwrap();
+    let gc_values = blobdir::parse_field_float("gc".to_string(), &options).unwrap();
+    let length_values = blobdir::parse_field_int("length".to_string(), &options).unwrap();
     let n_values = blobdir::parse_field_float("n".to_string(), &options);
-    let ncount_values = blobdir::parse_field_int("ncount".to_string(), &options);
+    let ncount_values = blobdir::parse_field_int("ncount".to_string(), &options).unwrap();
 
     let snail_stats = snail::snail_stats(
         &length_values,

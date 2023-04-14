@@ -33,7 +33,7 @@ pub struct AssemblyMeta {
     pub url: Option<Url>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FieldMeta {
     pub id: String,
     #[serde(rename = "type")]
@@ -78,6 +78,8 @@ pub struct Meta {
     pub fields: Vec<FieldMeta>,
     pub plot: PlotMeta,
     pub taxon: TaxonMeta,
+    pub field_list: Option<Vec<String>>,
+    pub busco_list: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -101,29 +103,71 @@ pub struct BuscoGene {
     pub status: String,
 }
 
+fn update_fields(field_list: &Vec<FieldMeta>) {}
+
 pub fn parse_blobdir(options: &cli::PlotOptions) -> Meta {
     let mut blob_meta = options.blobdir.clone();
     blob_meta.push("meta.json");
     let file = File::open(blob_meta).expect("no such file");
     let reader = BufReader::new(file);
 
-    let meta: Meta = serde_json::from_reader(reader).expect("unable to parse json");
-
+    let mut meta: Meta = serde_json::from_reader(reader).expect("unable to parse json");
     // println!("dataset {} has {} records", meta.id, meta.records);
+    let mut fields: Vec<String> = vec![];
+    let mut busco_fields: Vec<String> = vec![];
+    fn list_fields(
+        field_list: &Vec<FieldMeta>,
+        fields: &mut Vec<String>,
+        busco_fields: &mut Vec<String>,
+        busco: bool,
+    ) {
+        for f in field_list {
+            let busco_flag = if f.id == "busco".to_string() {
+                true
+            } else {
+                busco
+            };
+            if f.children.is_none() {
+                fields.push(f.id.clone());
+                if busco_flag {
+                    busco_fields.push(f.id.clone());
+                }
+            } else {
+                list_fields(
+                    &f.children.clone().unwrap(),
+                    fields,
+                    busco_fields,
+                    busco_flag,
+                )
+            }
+        }
+    }
+    list_fields(&meta.fields, &mut fields, &mut busco_fields, false);
+    meta.field_list = Some(fields);
+    meta.busco_list = Some(busco_fields);
 
     meta
 }
 
-fn field_reader(id: &String, options: &cli::PlotOptions) -> BufReader<File> {
+fn field_reader(id: &String, options: &cli::PlotOptions) -> Option<BufReader<File>> {
     let mut field_data = options.blobdir.clone();
     field_data.push(format!("{}.json", &id));
-    let file = File::open(field_data).expect("no such file");
-    let reader = BufReader::new(file);
+    let file = match File::open(field_data) {
+        Ok(file) => file,
+        Err(err) => {
+            println!("No such file. {}.json could not be found", &id);
+            return None;
+        }
+    };
+    let reader = Some(BufReader::new(file));
     reader
 }
 
-pub fn parse_field_busco(id: String, options: &cli::PlotOptions) -> Vec<Vec<BuscoGene>> {
-    let reader = field_reader(&id, &options);
+pub fn parse_field_busco(id: String, options: &cli::PlotOptions) -> Option<Vec<Vec<BuscoGene>>> {
+    let reader = match field_reader(&id, &options) {
+        Some(reader) => reader,
+        None => return None,
+    };
     let field: Field<Vec<(String, usize)>> =
         serde_json::from_reader(reader).expect("unable to parse json");
     let mut values: Vec<Vec<BuscoGene>> = vec![];
@@ -139,37 +183,49 @@ pub fn parse_field_busco(id: String, options: &cli::PlotOptions) -> Vec<Vec<Busc
         }
         values.push(val);
     }
-    values
+    Some(values)
 }
 
-pub fn parse_field_cat(id: String, options: &cli::PlotOptions) -> Vec<String> {
-    let reader = field_reader(&id, &options);
+pub fn parse_field_cat(id: String, options: &cli::PlotOptions) -> Option<Vec<String>> {
+    let reader = match field_reader(&id, &options) {
+        Some(reader) => reader,
+        None => return None,
+    };
     let field: Field<usize> = serde_json::from_reader(reader).expect("unable to parse json");
     let mut values: Vec<String> = vec![];
     let keys = field.keys.clone();
     for value in field.values() {
         values.push(keys[*value].clone())
     }
-    values
+    Some(values)
 }
 
-pub fn parse_field_float(id: String, options: &cli::PlotOptions) -> Vec<f64> {
-    let reader = field_reader(&id, &options);
+pub fn parse_field_float(id: String, options: &cli::PlotOptions) -> Option<Vec<f64>> {
+    let reader = match field_reader(&id, &options) {
+        Some(reader) => reader,
+        None => return None,
+    };
     let field: Field<f64> = serde_json::from_reader(reader).expect("unable to parse json");
     let values = field.values().clone();
-    values
+    Some(values)
 }
 
-pub fn parse_field_int(id: String, options: &cli::PlotOptions) -> Vec<usize> {
-    let reader = field_reader(&id, &options);
+pub fn parse_field_int(id: String, options: &cli::PlotOptions) -> Option<Vec<usize>> {
+    let reader = match field_reader(&id, &options) {
+        Some(reader) => reader,
+        None => return None,
+    };
     let field: Field<usize> = serde_json::from_reader(reader).expect("unable to parse json");
     let values = field.values().clone();
-    values
+    Some(values)
 }
 
-pub fn parse_field_string(id: String, options: &cli::PlotOptions) {
-    let reader = field_reader(&id, &options);
+pub fn parse_field_string(id: String, options: &cli::PlotOptions) -> Option<Vec<String>> {
+    let reader = match field_reader(&id, &options) {
+        Some(reader) => reader,
+        None => return None,
+    };
     let field: Field<String> = serde_json::from_reader(reader).expect("unable to parse json");
-    let values = field.values();
-    dbg!(values);
+    let values = field.values().clone();
+    Some(values)
 }

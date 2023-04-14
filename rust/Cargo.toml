@@ -41,8 +41,10 @@ num-integer = "0.1.45"
 pyo3 = { version = "0.18.1", features = ["extension-module"] }
 regex = "1.7.0"
 rust-htslib = "0.40.2"
+rust_decimal = "1.29.1"
 serde = { version = "1.0.152", features= ["derive"] }
 serde-aux = "4.2.0"
 serde_json = "1.0.93"
 svg = "0.13.1"
+titlecase = "2.2.1"
 url = { version = "2.3.1", features = ["serde"] }
