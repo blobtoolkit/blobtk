@@ -14,11 +14,14 @@ pub use cli::PlotOptions;
 pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     // let busco_list = meta.busco_list.clone().unwrap();
     let busco_field = meta.busco_list.clone().unwrap()[0].clone();
-    let busco_values = blobdir::parse_field_busco(busco_field, &options).unwrap();
+    let busco_values = blobdir::parse_field_busco(busco_field.0, &options).unwrap();
+    let busco_total = busco_field.1;
+    let busco_lineage = busco_field.2;
     let gc_values = blobdir::parse_field_float("gc".to_string(), &options).unwrap();
     let length_values = blobdir::parse_field_int("length".to_string(), &options).unwrap();
     let n_values = blobdir::parse_field_float("n".to_string(), &options);
     let ncount_values = blobdir::parse_field_int("ncount".to_string(), &options).unwrap();
+    let id = meta.id.clone();
 
     let snail_stats = snail::snail_stats(
         &length_values,
@@ -26,6 +29,9 @@ pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
         &n_values,
         &ncount_values,
         &busco_values,
+        busco_total,
+        busco_lineage,
+        id,
         &options,
     );
     snail::svg(&snail_stats, &options)

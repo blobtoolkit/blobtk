@@ -3,7 +3,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 use serde;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 use serde_json;
 use url::Url;
@@ -42,6 +42,9 @@ pub struct FieldMeta {
     pub datatype: Option<String>,
     pub children: Option<Vec<FieldMeta>>,
     pub parent: Option<String>,
+    pub count: Option<usize>,
+    #[serde(rename = "set")]
+    pub odb_set: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -79,7 +82,7 @@ pub struct Meta {
     pub plot: PlotMeta,
     pub taxon: TaxonMeta,
     pub field_list: Option<Vec<String>>,
-    pub busco_list: Option<Vec<String>>,
+    pub busco_list: Option<Vec<(String, usize, String)>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -97,7 +100,7 @@ impl<T> Field<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BuscoGene {
     pub id: String,
     pub status: String,
@@ -114,11 +117,11 @@ pub fn parse_blobdir(options: &cli::PlotOptions) -> Meta {
     let mut meta: Meta = serde_json::from_reader(reader).expect("unable to parse json");
     // println!("dataset {} has {} records", meta.id, meta.records);
     let mut fields: Vec<String> = vec![];
-    let mut busco_fields: Vec<String> = vec![];
+    let mut busco_fields: Vec<(String, usize, String)> = vec![];
     fn list_fields(
         field_list: &Vec<FieldMeta>,
         fields: &mut Vec<String>,
-        busco_fields: &mut Vec<String>,
+        busco_fields: &mut Vec<(String, usize, String)>,
         busco: bool,
     ) {
         for f in field_list {
@@ -130,7 +133,11 @@ pub fn parse_blobdir(options: &cli::PlotOptions) -> Meta {
             if f.children.is_none() {
                 fields.push(f.id.clone());
                 if busco_flag {
-                    busco_fields.push(f.id.clone());
+                    busco_fields.push((
+                        f.id.clone(),
+                        f.count.unwrap_or(1),
+                        f.odb_set.clone().unwrap(),
+                    ));
                 }
             } else {
                 list_fields(

@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::f64::consts::PI;
 
 use cli::PlotOptions;
@@ -10,12 +10,12 @@ use rust_decimal::prelude::*;
 use serde;
 use serde::{Deserialize, Serialize};
 use svg::node::element::path::Data;
-use svg::node::element::{Group, Line, Path, Rectangle, Text};
+use svg::node::element::{Circle, Group, Line, Path, Rectangle, Text};
 use svg::node::Text as nodeText;
 use svg::Document;
 use titlecase::titlecase;
 
-use crate::blobdir;
+use crate::blobdir::{self, BuscoGene};
 use crate::cli;
 
 mod compact_float {
@@ -64,6 +64,7 @@ impl SummaryStats {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SnailStats {
+    id: String,
     #[serde(rename = "assembly")]
     span: usize,
     #[serde(rename = "ATGC")]
@@ -79,6 +80,11 @@ pub struct SnailStats {
     binned_gcs: Vec<SummaryStats>,
     #[serde(rename = "binned_Ns")]
     binned_ns: Vec<SummaryStats>,
+    busco_complete: usize,
+    busco_fragmented: usize,
+    busco_duplicated: usize,
+    busco_total: usize,
+    busco_lineage: String,
     scaffolds: Vec<usize>,
     scaffold_count: usize,
     binned_scaffold_lengths: Vec<usize>,
@@ -113,6 +119,21 @@ impl SnailStats {
     pub fn binned_scaffold_counts(&self) -> &Vec<usize> {
         &self.binned_scaffold_counts
     }
+    pub fn busco_complete(&self) -> usize {
+        self.busco_complete
+    }
+    pub fn busco_fragmented(&self) -> usize {
+        self.busco_fragmented
+    }
+    pub fn busco_duplicated(&self) -> usize {
+        self.busco_duplicated
+    }
+    pub fn busco_total(&self) -> usize {
+        self.busco_total
+    }
+    pub fn busco_lineage(&self) -> &String {
+        &self.busco_lineage
+    }
 }
 
 fn indexed_sort<T: Ord>(list: &[T]) -> Vec<usize> {
@@ -122,12 +143,33 @@ fn indexed_sort<T: Ord>(list: &[T]) -> Vec<usize> {
     indices
 }
 
+fn count_buscos(
+    busco_values: &Vec<BuscoGene>,
+    busco_frag: &mut HashSet<String>,
+    busco_list: &mut HashSet<String>,
+    busco_dup: &mut HashSet<String>,
+) {
+    for busco in busco_values.clone().into_iter() {
+        let busco_id = busco.id;
+        if busco.status == "fragmented".to_string() {
+            busco_frag.insert(busco_id.clone());
+        }
+        if busco_list.contains(&busco_id) {
+            busco_dup.insert(busco_id.clone());
+        }
+        busco_list.insert(busco_id);
+    }
+}
+
 pub fn snail_stats(
     length_values: &Vec<usize>,
     gc_values: &Vec<f64>,
     n_vals: &Option<Vec<f64>>,
     ncount_values: &Vec<usize>,
     busco_values: &Vec<Vec<blobdir::BuscoGene>>,
+    busco_total: usize,
+    busco_lineage: String,
+    id: String,
     options: &cli::PlotOptions,
 ) -> SnailStats {
     let span = length_values.iter().sum();
@@ -149,6 +191,9 @@ pub fn snail_stats(
     let mut position: usize = 0;
     let mut binned_gcs: Vec<SummaryStats> = vec![];
     let mut binned_ns: Vec<SummaryStats> = vec![];
+    let mut busco_list = HashSet::new();
+    let mut busco_frag = HashSet::new();
+    let mut busco_dup = HashSet::new();
     let mut scaffold_index: usize = 0;
     let mut scaffold_sum: usize = length_values[order[scaffold_index]];
     let mut gc_span = gc_values[order[scaffold_index]]
@@ -156,8 +201,13 @@ pub fn snail_stats(
     let mut at_span = (1.0 - gc_values[order[scaffold_index]])
         * ((length_values[order[scaffold_index]] - ncount_values[order[scaffold_index]]) as f64);
     let mut n_span = ncount_values[order[scaffold_index]];
-    let mut n50_length = length_values[order[scaffold_index]];
-    let mut n90_length = length_values[order[scaffold_index]];
+    count_buscos(
+        &busco_values[order[scaffold_index]],
+        &mut busco_frag,
+        &mut busco_list,
+        &mut busco_dup,
+    );
+
     let mut binned_scaffold_lengths: Vec<usize> = vec![];
     let mut binned_scaffold_counts: Vec<usize> = vec![];
     for _ in 0..options.segments {
@@ -177,6 +227,12 @@ pub fn snail_stats(
                 * ((length_values[order[scaffold_index]] - ncount_values[order[scaffold_index]])
                     as f64);
             n_span += ncount_values[order[scaffold_index]];
+            count_buscos(
+                &busco_values[order[scaffold_index]],
+                &mut busco_frag,
+                &mut busco_list,
+                &mut busco_dup,
+            );
         }
         binned_scaffold_counts.push(scaffold_index + 1);
         binned_scaffold_lengths.push(length_values[order[scaffold_index]]);
@@ -204,8 +260,14 @@ pub fn snail_stats(
         binned_ns,
         scaffolds: vec![length_values[order[0]]],
         scaffold_count: length_values.len(),
+        busco_complete: busco_list.len(),
+        busco_duplicated: busco_dup.len(),
+        busco_fragmented: busco_frag.len(),
+        busco_total: busco_total,
+        busco_lineage,
         binned_scaffold_lengths,
         binned_scaffold_counts,
+        id,
     }
 }
 
@@ -245,6 +307,24 @@ pub enum TickStatus {
     Minor,
 }
 
+pub struct TickOptions {
+    font_size: f64,
+    font_color: String,
+    show_secondary_tick: bool,
+    status: TickStatus,
+}
+
+impl Default for TickOptions {
+    fn default() -> TickOptions {
+        TickOptions {
+            font_size: 20.0,
+            font_color: "black".to_string(),
+            show_secondary_tick: false,
+            status: TickStatus::Major,
+        }
+    }
+}
+
 pub struct RadialTick {
     index: usize,
     offset: f64,
@@ -259,6 +339,7 @@ pub struct RadialTick {
 pub struct Tick {
     label: Text,
     path: Path,
+    position: f64,
     status: TickStatus,
 }
 
@@ -277,6 +358,25 @@ pub fn path_axis_minor(path_data: Data, color: Option<&str>) -> Path {
         .set("stroke", col)
         .set("fill", "none")
         .set("stroke-width", 1)
+        .set("d", path_data)
+}
+
+pub fn path_gridline_major(path_data: Data, color: Option<&str>) -> Path {
+    let col = color.unwrap_or("black");
+    Path::new()
+        .set("stroke", col)
+        .set("fill", "none")
+        .set("stroke-width", 2)
+        .set("d", path_data)
+}
+
+pub fn path_gridline_minor(path_data: Data, color: Option<&str>) -> Path {
+    let col = color.unwrap_or("black");
+    Path::new()
+        .set("stroke", col)
+        .set("fill", "none")
+        .set("stroke-width", 1)
+        .set("stroke-dasharray", "5, 5")
         .set("d", path_data)
 }
 
@@ -323,6 +423,7 @@ pub fn set_tick_circular(
     tick_domain: &[usize; 2],
     tick_range: &[f64; 2],
     status: &TickStatus,
+    options: &TickOptions,
 ) -> RadialTick {
     let angle = linear_scale_float(index as f64 + offset, &angle_domain, &angle_range);
 
@@ -365,11 +466,17 @@ pub fn set_tick_circular(
         polar2cartesian(&Vector2::new(tick_distances[3], angle)),
     ];
     let outer_point = polar2cartesian(&Vector2::new(tick_distances[3] + 4.0, angle));
-    let tick_path_data = Data::new()
-        .move_to((tick_points[0][0], tick_points[0][1]))
-        .line_to((tick_points[1][0], tick_points[1][1]))
-        .move_to((tick_points[2][0], tick_points[2][1]))
-        .line_to((tick_points[3][0], tick_points[3][1]));
+    let tick_path_data = if options.show_secondary_tick {
+        Data::new()
+            .move_to((tick_points[0][0], tick_points[0][1]))
+            .line_to((tick_points[1][0], tick_points[1][1]))
+            .move_to((tick_points[2][0], tick_points[2][1]))
+            .line_to((tick_points[3][0], tick_points[3][1]))
+    } else {
+        Data::new()
+            .move_to((tick_points[0][0], tick_points[0][1]))
+            .line_to((tick_points[1][0], tick_points[1][1]))
+    };
     let path = match status {
         TickStatus::Major => path_axis_major(tick_path_data, None),
         TickStatus::Minor => path_axis_minor(tick_path_data, None),
@@ -379,11 +486,11 @@ pub fn set_tick_circular(
     } else {
         Text::new()
             .set("font-family", "Roboto, Open sans, sans-serif")
-            .set("font-size", "20")
+            .set("font-size", options.font_size.clone())
             .set("text-anchor", "middle")
             .set("dominant-baseline", "middle")
             .set("stroke", "none")
-            .set("fill", "black")
+            .set("fill", options.font_color.clone())
             .set(
                 "transform",
                 format!(
@@ -439,6 +546,7 @@ pub fn set_axis_ticks_circular(
     radius: f64,
     outer_radius: f64,
     span: usize,
+    options: TickOptions,
 ) -> Vec<RadialTick> {
     let (divisor, remainder) = div_rem(bin_count, tick_count);
     let angle_domain = [0.0, bin_count as f64];
@@ -460,6 +568,7 @@ pub fn set_axis_ticks_circular(
             &tick_domain,
             &tick_range,
             &status,
+            &options,
         ));
         // }
         for i in (divisor..bin_count + 1).step_by(divisor) {
@@ -477,6 +586,7 @@ pub fn set_axis_ticks_circular(
                 &tick_domain,
                 &tick_range,
                 &status,
+                &options,
             ));
         }
     } else {
@@ -494,6 +604,7 @@ pub fn set_axis_ticks_circular(
             &tick_domain,
             &tick_range,
             &status,
+            &options,
         ));
         while ticks.len() < tick_count + 1 {
             sum += step;
@@ -513,6 +624,7 @@ pub fn set_axis_ticks_circular(
                 &tick_domain,
                 &tick_range,
                 &status,
+                &options,
             ))
         }
     }
@@ -584,6 +696,7 @@ pub fn set_tick(
     Tick {
         label: text,
         path,
+        position: offset,
         status: match status {
             TickStatus::Major => TickStatus::Major,
             TickStatus::Minor => TickStatus::Minor,
@@ -629,7 +742,18 @@ pub fn set_axis_ticks(
     ticks
 }
 
-pub fn legend(title: String, entries: Vec<(String, String)>, columns: u8) -> Group {
+pub enum LegendShape {
+    Rect,
+    Circumference,
+    Radius,
+}
+
+pub fn legend(
+    title: String,
+    entries: Vec<(String, String, LegendShape)>,
+    subtitle: Option<String>,
+    columns: u8,
+) -> Group {
     let title_text = Text::new()
         .set("font-family", "Roboto, Open sans, sans-serif")
         .set("font-size", "24")
@@ -641,16 +765,66 @@ pub fn legend(title: String, entries: Vec<(String, String)>, columns: u8) -> Gro
     let mut group = Group::new().add(title_text);
     let cell = 18;
     let gap = 8;
-    let mut offset = gap / 2;
-    for entry in entries {
-        let rect = Rectangle::new()
-            .set("stroke", "black")
-            .set("stroke-width", 2)
-            .set("fill", entry.1)
-            .set("x", 0)
-            .set("y", 6)
-            .set("height", cell)
-            .set("width", cell);
+    let mut offset_y = 0;
+    let mut offset_x = -175;
+    let per_column = entries.len() / columns as usize;
+    for (i, entry) in entries.iter().enumerate() {
+        if i % per_column == 0 {
+            offset_x += 175;
+            offset_y = gap / 2;
+        }
+        let shape = match entry.2 {
+            LegendShape::Rect => Group::new().add(
+                Rectangle::new()
+                    .set("stroke", "black")
+                    .set("stroke-width", 2)
+                    .set("fill", entry.clone().1.clone())
+                    .set("x", 0)
+                    .set("y", 6)
+                    .set("height", cell)
+                    .set("width", cell),
+            ),
+            LegendShape::Circumference => Group::new()
+                .add(
+                    Circle::new()
+                        .set("stroke", "black")
+                        .set("stroke-width", 2)
+                        .set("fill", entry.clone().1.clone())
+                        .set("cx", cell / 2)
+                        .set("cy", 6 + cell / 2)
+                        .set("r", cell / 2),
+                )
+                .add(
+                    Line::new()
+                        .set("fill", "none")
+                        .set("stroke", "black")
+                        .set("stroke-width", 1)
+                        .set("x1", cell / 2)
+                        .set("y1", 6 + cell / 2)
+                        .set("x2", cell / 2)
+                        .set("y2", 6),
+                ),
+            LegendShape::Radius => Group::new()
+                .add(
+                    Circle::new()
+                        .set("stroke", "black")
+                        .set("stroke-width", 1)
+                        .set("fill", entry.clone().1.clone())
+                        .set("cx", cell / 2)
+                        .set("cy", 6 + cell / 2)
+                        .set("r", cell / 2),
+                )
+                .add(
+                    Line::new()
+                        .set("fill", "none")
+                        .set("stroke", "black")
+                        .set("stroke-width", 2)
+                        .set("x1", cell / 2)
+                        .set("y1", 6 + cell / 2)
+                        .set("x2", cell / 2)
+                        .set("y2", 6),
+                ),
+        };
         let entry_text = Text::new()
             .set("font-family", "Roboto, Open sans, sans-serif")
             .set("font-size", cell)
@@ -660,13 +834,31 @@ pub fn legend(title: String, entries: Vec<(String, String)>, columns: u8) -> Gro
             .set("fill", "black")
             .set("x", cell + gap)
             .set("y", cell + gap / 2)
-            .add(nodeText::new(entry.0));
+            .add(nodeText::new(&entry.clone().0));
         let entry_group = Group::new()
-            .set("transform", format!("translate(0, {})", offset))
-            .add(rect)
+            .set(
+                "transform",
+                format!("translate({}, {})", offset_x, offset_y),
+            )
+            .add(shape)
             .add(entry_text);
         group = group.add(entry_group);
-        offset = offset + cell + gap;
+        offset_y = offset_y + cell + gap;
+    }
+    match subtitle {
+        None => (),
+        Some(subtitle_string) => {
+            let subtitle_text = Text::new()
+                .set("font-family", "Roboto, Open sans, sans-serif")
+                .set("font-size", "18")
+                .set("text-anchor", "start")
+                .set("dominant-baseline", "bottom")
+                .set("stroke", "none")
+                .set("fill", "black")
+                .set("transform", "translate(100, 0)")
+                .add(nodeText::new(subtitle_string));
+            group = group.add(subtitle_text);
+        }
     }
 
     group
@@ -685,26 +877,31 @@ pub fn scaffold_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOption
     entries.push((
         format!("Log10 {} count (total {})", record, scaffold_count),
         "#dddddd".to_string(),
+        LegendShape::Rect,
     ));
     entries.push((
         format!("{} length (total {})", titlecase(record), scaffold_length),
         "#999999".to_string(),
+        LegendShape::Rect,
     ));
     entries.push((
         format!("Longest {} ({})", record, longest_scaffold),
         "#e31a1c".to_string(),
+        LegendShape::Rect,
     ));
     entries.push((
         format!("N50 length ({})", n50_length),
         "#ff7f00".to_string(),
+        LegendShape::Rect,
     ));
     entries.push((
         format!("N90 length ({})", n90_length),
         "#fdbf6f".to_string(),
+        LegendShape::Rect,
     ));
 
     let title = format!("{} statistics", titlecase(record));
-    legend(title, entries, 1)
+    legend(title, entries, None, 1)
 }
 
 pub fn composition_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Group {
@@ -712,12 +909,100 @@ pub fn composition_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOpt
     let gc_prop = format_si(&(snail_stats.gc_proportion as f64 * 100.0), 3);
     let at_prop = format_si(&(snail_stats.at_proportion as f64 * 100.0), 3);
     let n_prop = format_si(&(snail_stats.n_proportion as f64 * 100.0), 3);
-    entries.push((format!("GC ({}%)", gc_prop), "#1f78b4".to_string()));
-    entries.push((format!("AT ({}%)", at_prop), "#a6cee3".to_string()));
-    entries.push((format!("N ({}%)", n_prop), "#ffffff".to_string()));
+    entries.push((
+        format!("GC ({}%)", gc_prop),
+        "#1f78b4".to_string(),
+        LegendShape::Rect,
+    ));
+    entries.push((
+        format!("AT ({}%)", at_prop),
+        "#a6cee3".to_string(),
+        LegendShape::Rect,
+    ));
+    entries.push((
+        format!("N ({}%)", n_prop),
+        "#ffffff".to_string(),
+        LegendShape::Rect,
+    ));
 
     let title = "Composition".to_string();
-    legend(title, entries, 1)
+    legend(title, entries, None, 1)
+}
+
+pub fn scale_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Group {
+    let mut entries = vec![];
+    let circ_prop = format_si(&(snail_stats.span() as f64), 3);
+    let rad_prop = format_si(&(snail_stats.scaffolds()[0] as f64), 3);
+    entries.push((
+        format!("{}", circ_prop),
+        "#ffffff".to_string(),
+        LegendShape::Circumference,
+    ));
+    entries.push((
+        format!("{}", rad_prop),
+        "#ffffff".to_string(),
+        LegendShape::Radius,
+    ));
+
+    let title = "Scale".to_string();
+    legend(title, entries, None, 1)
+}
+
+pub fn dataset_name_legend(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Group {
+    let entries = vec![];
+
+    let title = format!("Dataset: {}", snail_stats.id);
+    legend(title, entries, None, 1)
+}
+
+pub fn busco_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Group {
+    let mut entries = vec![];
+    let comp_prop = format_si(
+        &(snail_stats.busco_complete as f64 / snail_stats.busco_total as f64 * 100.0),
+        3,
+    );
+    let dup_prop = format_si(
+        &(snail_stats.busco_duplicated as f64 / snail_stats.busco_total as f64 * 100.0),
+        3,
+    );
+    let frag_prop = format_si(
+        &(snail_stats.busco_fragmented as f64 / snail_stats.busco_total as f64 * 100.0),
+        3,
+    );
+    let missing_prop = format_si(
+        &((snail_stats.busco_total - snail_stats.busco_complete) as f64
+            / snail_stats.busco_total as f64
+            * 100.0),
+        3,
+    );
+    let subtitle = format!(
+        "{} ({})",
+        snail_stats.busco_lineage,
+        snail_stats.busco_total()
+    );
+    entries.push((
+        format!("Comp. ({}%)", comp_prop),
+        "#33a02c".to_string(),
+        LegendShape::Rect,
+    ));
+    entries.push((
+        format!("Dupl. ({}%)", dup_prop),
+        "#20641b".to_string(),
+        LegendShape::Rect,
+    ));
+    entries.push((
+        format!("Frag. ({}%)", frag_prop),
+        "#a3e27f".to_string(),
+        LegendShape::Rect,
+    ));
+    entries.push((
+        format!("Missing ({}%)", missing_prop),
+        "#ffffff".to_string(),
+        LegendShape::Rect,
+    ));
+
+    let title = "BUSCO".to_string();
+    legend(title, entries, Some(subtitle), 2)
 }
 
 pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
@@ -740,6 +1025,10 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
         radius,
         outer_radius,
         snail_stats.span(),
+        TickOptions {
+            show_secondary_tick: true,
+            ..Default::default()
+        },
     );
     let minor_ticks = set_axis_ticks_circular(
         bin_count,
@@ -749,6 +1038,10 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
         radius,
         outer_radius,
         snail_stats.span(),
+        TickOptions {
+            show_secondary_tick: true,
+            ..Default::default()
+        },
     );
     let major_length_ticks = set_axis_ticks(
         &(max_scaffold as f64),
@@ -788,6 +1081,8 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
     let mut polar_outer_n_coords: Vec<Vec<f64>> = vec![];
     let mut polar_inner_n_max_coords: Vec<Vec<f64>> = vec![];
     let mut polar_outer_n_max_coords: Vec<Vec<f64>> = vec![];
+    let scaf_count_domain = [0, 10000000000];
+    let scaf_count_range = [0.0, radius];
     for i in 0..bin_count {
         // angle
         let angle = linear_scale(i + 1, &[0, bin_count], &[-PI / 2.0, max_radians - PI / 2.0]);
@@ -807,8 +1102,8 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
         let scaf_count_polar: Vec<f64> = vec![
             log_scale(
                 snail_stats.binned_scaffold_counts()[i],
-                &[0, 10000000000],
-                &[0.0, radius],
+                &scaf_count_domain,
+                &scaf_count_range,
             ),
             angle,
         ];
@@ -951,14 +1246,6 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
         .set("y1", 0.0)
         .set("x2", 0.0)
         .set("y2", -radius);
-    // let outer_axis = Line::new()
-    //     .set("fill", "none")
-    //     .set("stroke", "black")
-    //     .set("stroke-width", 3)
-    //     .set("x1", 0.0)
-    //     .set("y1", -radius)
-    //     .set("x2", 0.0)
-    //     .set("y2", -outer_radius);
 
     let mut major_tick_group = Group::new();
     for tick in major_ticks {
@@ -973,8 +1260,27 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
     }
 
     let mut major_length_tick_group = Group::new();
+    let mut major_length_gridline_group = Group::new();
     for tick in major_length_ticks {
-        major_length_tick_group = major_length_tick_group.add(tick.path).add(tick.label)
+        major_length_tick_group = major_length_tick_group.add(tick.path).add(tick.label);
+        let arc_data = arc_path(tick.position, None, -PI / 2.0, PI * 1.5, options.segments);
+        major_length_gridline_group =
+            major_length_gridline_group.add(path_gridline_minor(arc_data, Some("#ffffff")));
+    }
+
+    let mut major_count_gridline_group = Group::new();
+    let mut i = 10;
+    while i <= snail_stats.scaffold_count() {
+        let arc_data = arc_path(
+            log_scale(i, &scaf_count_domain, &scaf_count_range),
+            None,
+            -PI / 2.0,
+            PI * 1.5,
+            options.segments,
+        );
+        major_count_gridline_group =
+            major_count_gridline_group.add(path_gridline_major(arc_data, Some("#ffffff")));
+        i *= 10;
     }
 
     let mut minor_length_tick_group = Group::new();
@@ -986,11 +1292,23 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
         .set("transform", format!("translate({},{})", 5, 25));
 
     let comp_stats_legend = composition_stats_legend(&snail_stats, &options)
-        .set("transform", format!("translate({},{})", 825, 875));
+        .set("transform", format!("translate({},{})", 835, 900));
+
+    let scale_legend = scale_stats_legend(&snail_stats, &options)
+        .set("transform", format!("translate({},{})", 5, 900));
+
+    let dataset_legend = dataset_name_legend(&snail_stats, &options)
+        .set("transform", format!("translate({},{})", 5, 990));
+
+    let busc_stats_legend = busco_stats_legend(&snail_stats, &options)
+        .set("transform", format!("translate({},{})", 630, 25));
+
+    let busco_group = busco_plot(snail_stats).set("transform", "translate(910, 170)");
 
     let group = Group::new()
-        .set("transform", "translate(500, 500)")
+        .set("transform", "translate(500, 525)")
         .add(scaf_count_path)
+        .add(major_count_gridline_group)
         .add(scaf_length_path)
         .add(gc_prop_path)
         .add(at_prop_path)
@@ -1003,6 +1321,7 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
         .add(longest_arc_path)
         .add(n50_arc_path)
         .add(n90_arc_path)
+        .add(major_length_gridline_group)
         .add(n50_arc_outline_path)
         .add(longest_arc_outline_path)
         .add(minor_tick_group)
@@ -1017,10 +1336,166 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
     let document = Document::new()
         .set("viewBox", (0, 0, 1000, 1000))
         .add(group)
+        .add(busco_group)
         .add(scaf_stats_legend)
-        .add(comp_stats_legend);
+        .add(comp_stats_legend)
+        .add(busc_stats_legend)
+        .add(scale_legend)
+        .add(dataset_legend);
 
     svg::save(options.output.as_str(), &document).unwrap();
+}
+
+fn busco_plot(snail_stats: &SnailStats) -> Group {
+    let domain = [0.0, snail_stats.busco_total() as f64];
+    let range = [-PI / 2.0, PI * 1.5];
+    let inner_radius = 20.0;
+    let outer_radius = 60.0;
+    let comp_arc_data = arc_path(
+        outer_radius,
+        Some(inner_radius),
+        -PI / 2.0,
+        linear_scale_float(snail_stats.busco_complete() as f64, &domain, &range),
+        1000,
+    );
+    let comp_arc_path = path_filled(comp_arc_data, Some("#33a02c"));
+    let frag_arc_data = arc_path(
+        outer_radius,
+        Some(inner_radius),
+        linear_scale_float(snail_stats.busco_complete() as f64, &domain, &range),
+        linear_scale_float(
+            (snail_stats.busco_fragmented() + snail_stats.busco_complete()) as f64,
+            &domain,
+            &range,
+        ),
+        1000,
+    );
+    let frag_arc_path = path_filled(frag_arc_data, Some("#a3e27f"));
+    let dup_arc_data = arc_path(
+        outer_radius,
+        Some(inner_radius),
+        -PI / 2.0,
+        linear_scale_float(snail_stats.busco_duplicated() as f64, &domain, &range),
+        1000,
+    );
+    let dup_arc_path = path_filled(dup_arc_data, Some("#20641b"));
+    let major_ticks = set_axis_ticks_circular(
+        1000,
+        10,
+        TickStatus::Major,
+        2.0 * PI,
+        outer_radius,
+        outer_radius + 20.0,
+        100,
+        TickOptions {
+            font_size: 14.0,
+            ..Default::default()
+        },
+    );
+    let mut major_tick_group = Group::new();
+    for tick in major_ticks {
+        major_tick_group = major_tick_group.add(tick.path).add(tick.label)
+    }
+    let minor_ticks = set_axis_ticks_circular(
+        1000,
+        50,
+        TickStatus::Minor,
+        2.0 * PI,
+        outer_radius,
+        outer_radius + 20.0,
+        100,
+        TickOptions {
+            ..Default::default()
+        },
+    );
+    let mut minor_tick_group = Group::new();
+    for tick in minor_ticks {
+        minor_tick_group = minor_tick_group.add(tick.path)
+    }
+
+    let cirular_axis_data = arc_path(outer_radius, None, -PI / 2.0, PI * 1.5, 1000);
+    let circular_axis_path = path_axis_minor(cirular_axis_data, None);
+
+    let radial_axis = Line::new()
+        .set("fill", "none")
+        .set("stroke", "black")
+        .set("stroke-width", 1)
+        .set("x1", 0.0)
+        .set("y1", 0.0)
+        .set("x2", 0.0)
+        .set("y2", -outer_radius);
+
+    let busco_group = Group::new()
+        .add(comp_arc_path)
+        .add(frag_arc_path)
+        .add(dup_arc_path)
+        .add(minor_tick_group)
+        .add(major_tick_group)
+        .add(radial_axis)
+        .add(circular_axis_path);
+
+    busco_group
+}
+
+fn arc_path(
+    radius: f64,
+    inner_radius: Option<f64>,
+    min_radians: f64,
+    max_radians: f64,
+    resolution: usize,
+) -> Data {
+    let mut path_data = Data::new();
+    if min_radians == max_radians {
+        return path_data;
+    }
+
+    let mut step = 2.0 * PI / resolution as f64;
+    let length = ((max_radians - min_radians) / step) as usize;
+    step = (max_radians - min_radians) / length as f64;
+
+    let first_polar_coord = Vector2::new(radius, min_radians);
+    let first_cartesian_coord = polar2cartesian(&first_polar_coord);
+
+    match inner_radius {
+        None => path_data = path_data.move_to((first_cartesian_coord[0], first_cartesian_coord[1])),
+        Some(rad) => {
+            if rad == 0.0 {
+                let polar_coord = Vector2::new(0.0, 0.0);
+                let cartesian_coord = polar2cartesian(&polar_coord);
+                path_data = path_data
+                    .move_to((cartesian_coord[0], cartesian_coord[1]))
+                    .line_to((first_cartesian_coord[0], first_cartesian_coord[1]));
+            } else {
+                let mut angle = max_radians;
+                for i in (0..length).rev() {
+                    let polar_coord = Vector2::new(rad, angle);
+                    let cartesian_coord = polar2cartesian(&polar_coord);
+                    if i == length - 1 {
+                        path_data = path_data.move_to((cartesian_coord[0], cartesian_coord[1]))
+                    } else {
+                        path_data = path_data.line_to((cartesian_coord[0], cartesian_coord[1]))
+                    }
+                    angle -= step;
+                }
+                path_data = path_data.line_to((first_cartesian_coord[0], first_cartesian_coord[1]))
+            }
+        }
+    };
+
+    let mut angle = min_radians;
+    for _ in 0..(length + 1) {
+        let polar_coord = Vector2::new(radius, angle);
+        let cartesian_coord = polar2cartesian(&polar_coord);
+        path_data = path_data.line_to((cartesian_coord[0], cartesian_coord[1]));
+        angle += step;
+    }
+
+    match inner_radius {
+        None => {}
+        Some(_) => path_data = path_data.close(),
+    };
+
+    path_data
 }
 
 fn polar_to_path(
@@ -1058,7 +1533,7 @@ fn polar_to_path(
 
     for i in 0..polar_coords.len() {
         let polar_coord_end = Vector2::new(polar_coords[i][0], polar_coords[i][1]);
-        let mut polar_coord_start = Vector2::new(0.0, 0.0);
+        let mut polar_coord_start;
         if i > 0 {
             polar_coord_start = Vector2::new(polar_coords[i][0], polar_coords[i - 1][1]);
         } else {
