@@ -22,6 +22,7 @@ pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     let n_values = blobdir::parse_field_float("n".to_string(), &options);
     let ncount_values = blobdir::parse_field_int("ncount".to_string(), &options).unwrap();
     let id = meta.id.clone();
+    let record_type = meta.record_type.clone();
 
     let snail_stats = snail::snail_stats(
         &length_values,
@@ -32,6 +33,7 @@ pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
         busco_total,
         busco_lineage,
         id,
+        record_type,
         &options,
     );
     snail::svg(&snail_stats, &options)

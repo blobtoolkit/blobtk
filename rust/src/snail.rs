@@ -85,6 +85,7 @@ pub struct SnailStats {
     busco_duplicated: usize,
     busco_total: usize,
     busco_lineage: String,
+    record_type: String,
     scaffolds: Vec<usize>,
     scaffold_count: usize,
     binned_scaffold_lengths: Vec<usize>,
@@ -134,6 +135,9 @@ impl SnailStats {
     pub fn busco_lineage(&self) -> &String {
         &self.busco_lineage
     }
+    pub fn record_type(&self) -> &String {
+        &self.record_type
+    }
 }
 
 fn indexed_sort<T: Ord>(list: &[T]) -> Vec<usize> {
@@ -170,6 +174,7 @@ pub fn snail_stats(
     busco_total: usize,
     busco_lineage: String,
     id: String,
+    record_type: String,
     options: &cli::PlotOptions,
 ) -> SnailStats {
     let span = length_values.iter().sum();
@@ -268,6 +273,7 @@ pub fn snail_stats(
         binned_scaffold_lengths,
         binned_scaffold_counts,
         id,
+        record_type,
     }
 }
 
@@ -724,6 +730,7 @@ pub fn set_axis_ticks(
     let mut ticks: Vec<Tick> = vec![];
     match status {
         TickStatus::Major => {
+            let mut i = 10u32.pow(power) as f64;
             while i <= max_value.clone() {
                 let label = if i > min_value.clone() {
                     format_si(&i, 3)
@@ -735,10 +742,13 @@ pub fn set_axis_ticks(
             }
         }
         TickStatus::Minor => {
+            let mut i = 10u32.pow(power - 1) as f64;
             while i <= max_value.clone() {
                 let mut j = i * 2.0;
                 while j < i * 10.0 && j <= max_value.clone() {
-                    ticks.push(set_tick(j, String::new(), &domain, &range, &status));
+                    if &(j as f64) >= min_value {
+                        ticks.push(set_tick(j, String::new(), &domain, &range, &status));
+                    }
                     j = j + i;
                 }
                 ticks.push(set_tick(i, String::new(), &domain, &range, &status));
@@ -880,7 +890,7 @@ pub fn scaffold_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOption
     let n90_bin = (options.segments * 9 / 10) - 1;
     let n50_length = format_si(&(snail_stats.binned_scaffold_lengths()[n50_bin] as f64), 3);
     let n90_length = format_si(&(snail_stats.binned_scaffold_lengths()[n90_bin] as f64), 3);
-    let record = "scaffold";
+    let record = snail_stats.record_type();
     entries.push((
         format!("Log10 {} count (total {})", record, scaffold_count),
         "#dddddd".to_string(),

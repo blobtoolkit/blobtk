@@ -6,6 +6,7 @@ use serde;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 use serde_json;
+use titlecase::titlecase;
 use url::Url;
 
 use crate::cli;
@@ -152,6 +153,13 @@ pub fn parse_blobdir(options: &cli::PlotOptions) -> Meta {
     list_fields(&meta.fields, &mut fields, &mut busco_fields, false);
     meta.field_list = Some(fields);
     meta.busco_list = Some(busco_fields);
+    if meta.record_type != "scaffold" {
+        meta.record_type = if titlecase(&meta.assembly.level) == "Contig".to_string() {
+            "contig".to_string()
+        } else {
+            "scaffold".to_string()
+        };
+    }
 
     meta
 }
