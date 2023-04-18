@@ -151,7 +151,7 @@ fn count_buscos(
 ) {
     for busco in busco_values.clone().into_iter() {
         let busco_id = busco.id;
-        if busco.status == "fragmented".to_string() {
+        if busco.status == "Fragmented".to_string() {
             busco_frag.insert(busco_id.clone());
         }
         if busco_list.contains(&busco_id) {
@@ -710,9 +710,16 @@ pub fn set_axis_ticks(
     status: &TickStatus,
     dimension: &f64,
 ) -> Vec<Tick> {
-    let mut i = min_value.clone();
     let range = [-dimension.clone(), 0.0];
     let domain = [min_value.clone(), max_value.clone()];
+
+    let mut power = 0;
+    let mut min_val = min_value.clone();
+    while min_val > 1.0 {
+        power += 1;
+        min_val /= 10.0;
+    }
+    let mut i = 10u32.pow(power) as f64;
 
     let mut ticks: Vec<Tick> = vec![];
     match status {
@@ -931,8 +938,16 @@ pub fn composition_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOpt
 
 pub fn scale_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Group {
     let mut entries = vec![];
-    let circ_prop = format_si(&(snail_stats.span() as f64), 3);
-    let rad_prop = format_si(&(snail_stats.scaffolds()[0] as f64), 3);
+    let max_span = match options.max_span {
+        Some(span) => span,
+        None => snail_stats.span(),
+    };
+    let max_scaffold = match options.max_scaffold {
+        Some(scaffold_length) => scaffold_length,
+        None => snail_stats.scaffolds()[0],
+    };
+    let circ_prop = format_si(&(max_span as f64), 3);
+    let rad_prop = format_si(&(max_scaffold as f64), 3);
     entries.push((
         format!("{}", circ_prop),
         "#ffffff".to_string(),
@@ -1006,8 +1021,14 @@ pub fn busco_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOptions) 
 }
 
 pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
-    let max_span: usize = snail_stats.span();
-    let max_scaffold: usize = snail_stats.scaffolds()[0];
+    let max_span = match options.max_span {
+        Some(span) => span,
+        None => snail_stats.span(),
+    };
+    let max_scaffold = match options.max_scaffold {
+        Some(scaffold_length) => scaffold_length,
+        None => snail_stats.scaffolds()[0],
+    };
     let radius: f64 = 375.0;
     let outer_radius: f64 = 450.0;
     let bin_count = snail_stats.binned_scaffold_lengths().len();
@@ -1043,15 +1064,16 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
             ..Default::default()
         },
     );
+    let min_length_tick = snail_stats.binned_scaffold_lengths()[bin_count - 1];
     let major_length_ticks = set_axis_ticks(
         &(max_scaffold as f64),
-        &10000.0,
+        &(min_length_tick as f64),
         &TickStatus::Major,
         &radius,
     );
     let minor_length_ticks = set_axis_ticks(
         &(max_scaffold as f64),
-        &10000.0,
+        &(min_length_tick as f64),
         &TickStatus::Minor,
         &radius,
     );
@@ -1261,9 +1283,16 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
 
     let mut major_length_tick_group = Group::new();
     let mut major_length_gridline_group = Group::new();
+
     for tick in major_length_ticks {
         major_length_tick_group = major_length_tick_group.add(tick.path).add(tick.label);
-        let arc_data = arc_path(tick.position, None, -PI / 2.0, PI * 1.5, options.segments);
+        let arc_data = arc_path(
+            -1.0 * tick.position,
+            None,
+            -PI / 2.0,
+            max_radians - PI / 2.0,
+            options.segments,
+        );
         major_length_gridline_group =
             major_length_gridline_group.add(path_gridline_minor(arc_data, Some("#ffffff")));
     }
@@ -1275,7 +1304,7 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
             log_scale(i, &scaf_count_domain, &scaf_count_range),
             None,
             -PI / 2.0,
-            PI * 1.5,
+            max_radians - PI / 2.0,
             options.segments,
         );
         major_count_gridline_group =
@@ -1445,13 +1474,9 @@ fn arc_path(
     resolution: usize,
 ) -> Data {
     let mut path_data = Data::new();
-    if min_radians == max_radians {
-        return path_data;
-    }
 
-    let mut step = 2.0 * PI / resolution as f64;
-    let length = ((max_radians - min_radians) / step) as usize;
-    step = (max_radians - min_radians) / length as f64;
+    let step = (max_radians - min_radians) / resolution as f64;
+    let length = resolution;
 
     let first_polar_coord = Vector2::new(radius, min_radians);
     let first_cartesian_coord = polar2cartesian(&first_polar_coord);
@@ -1467,10 +1492,10 @@ fn arc_path(
                     .line_to((first_cartesian_coord[0], first_cartesian_coord[1]));
             } else {
                 let mut angle = max_radians;
-                for i in (0..length).rev() {
+                for i in (0..length + 1).rev() {
                     let polar_coord = Vector2::new(rad, angle);
                     let cartesian_coord = polar2cartesian(&polar_coord);
-                    if i == length - 1 {
+                    if i == length {
                         path_data = path_data.move_to((cartesian_coord[0], cartesian_coord[1]))
                     } else {
                         path_data = path_data.line_to((cartesian_coord[0], cartesian_coord[1]))
@@ -1491,7 +1516,7 @@ fn arc_path(
     }
 
     match inner_radius {
-        None => {}
+        None => (),
         Some(_) => path_data = path_data.close(),
     };
 
@@ -1597,10 +1622,7 @@ fn polar_to_path_bounded(
                 Vector2::new(polar_bound_coords[i + 1][0], polar_bound_coords[i + 1][1]);
             polar_coord_end = Vector2::new(polar_bound_coords[i + 1][0], polar_bound_coords[i][1]);
         } else {
-            polar_coord_start = Vector2::new(
-                polar_bound_coords[i][0],
-                linear_scale(0, &[0, bin_count], &[-PI / 2.0, max_radians - PI / 2.0]),
-            );
+            polar_coord_start = Vector2::new(polar_bound_coords[i][0], max_radians - PI / 2.0);
             polar_coord_end = Vector2::new(polar_bound_coords[i][0], polar_bound_coords[i][1]);
         };
 
@@ -1639,7 +1661,6 @@ fn polar_to_path_bounded(
         path_data = path_data
             .line_to((cartesian_start[0], cartesian_start[1]))
             .line_to((cartesian_end[0], cartesian_end[1]));
-        // }
     }
     if polar_coords.len() > 0 {
         path_data = path_data.close();

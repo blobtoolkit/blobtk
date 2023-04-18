@@ -182,6 +182,12 @@ pub struct PlotOptions {
     /// Segment count for snail plot
     #[arg(long, short = 's', default_value_t = 1000)]
     pub segments: usize,
+    /// Max span for snail plot
+    #[arg(long = "max-span")]
+    pub max_span: Option<usize>,
+    /// max scaffold length for snail plot
+    #[arg(long = "max-scaffold")]
+    pub max_scaffold: Option<usize>,
 }
 
 /// Options to pass to `blobtk taxonomy`
