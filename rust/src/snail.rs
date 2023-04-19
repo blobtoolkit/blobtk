@@ -1,8 +1,7 @@
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::f64::consts::PI;
 
-use cli::PlotOptions;
 use coord_transforms::d2::polar2cartesian;
 use coord_transforms::prelude::*;
 use num_integer::div_rem;
@@ -10,7 +9,7 @@ use rust_decimal::prelude::*;
 use serde;
 use serde::{Deserialize, Serialize};
 use svg::node::element::path::Data;
-use svg::node::element::{Circle, Group, Line, Path, Rectangle, Text, SVG};
+use svg::node::element::{Circle, Group, Line, Path, Rectangle, Text};
 use svg::node::Text as nodeText;
 use svg::Document;
 use titlecase::titlecase;

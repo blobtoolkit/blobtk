@@ -179,6 +179,8 @@ pub struct PlotOptions {
     /// Output filename
     #[arg(long, short = 'o', default_value_t = String::from("output.svg"))]
     pub output: String,
+    #[arg(long, short = 'f')]
+    pub filter: Vec<String>,
     /// Segment count for snail plot
     #[arg(long, short = 's', default_value_t = 1000)]
     pub segments: usize,

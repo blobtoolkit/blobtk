@@ -43,22 +43,34 @@ pub fn save_png(document: &Document, _: &PlotOptions) {
 pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     // let busco_list = meta.busco_list.clone().unwrap();
     let busco_field = meta.busco_list.clone().unwrap()[0].clone();
-    let busco_values = blobdir::parse_field_busco(busco_field.0, &options).unwrap();
+    let busco_values = blobdir::parse_field_busco(busco_field.0, &options.blobdir).unwrap();
     let busco_total = busco_field.1;
     let busco_lineage = busco_field.2;
-    let gc_values = blobdir::parse_field_float("gc".to_string(), &options).unwrap();
-    let length_values = blobdir::parse_field_int("length".to_string(), &options).unwrap();
-    let n_values = blobdir::parse_field_float("n".to_string(), &options);
-    let ncount_values = blobdir::parse_field_int("ncount".to_string(), &options).unwrap();
+    let gc_values = blobdir::parse_field_float("gc".to_string(), &options.blobdir).unwrap();
+    let length_values = blobdir::parse_field_int("length".to_string(), &options.blobdir).unwrap();
+    let n_values = blobdir::parse_field_float("n".to_string(), &options.blobdir);
+    let ncount_values = blobdir::parse_field_int("ncount".to_string(), &options.blobdir).unwrap();
     let id = meta.id.clone();
     let record_type = meta.record_type.clone();
 
+    let filters = blobdir::parse_filters(&options.filter);
+    let wanted_indices = blobdir::set_filters(filters, &meta, &options.blobdir);
+
+    let gc_filtered = blobdir::apply_filter_float(&gc_values, &wanted_indices);
+    let n_filtered = match n_values {
+        None => None,
+        Some(values) => Some(blobdir::apply_filter_float(&values, &wanted_indices)),
+    };
+    let length_filtered = blobdir::apply_filter_int(&length_values, &wanted_indices);
+    let ncount_filtered = blobdir::apply_filter_int(&ncount_values, &wanted_indices);
+    let busco_filtered = blobdir::apply_filter_busco(&busco_values, &wanted_indices);
+
     let snail_stats = snail::snail_stats(
-        &length_values,
-        &gc_values,
-        &n_values,
-        &ncount_values,
-        &busco_values,
+        &length_filtered,
+        &gc_filtered,
+        &n_filtered,
+        &ncount_filtered,
+        &busco_filtered,
         busco_total,
         busco_lineage,
         id,
@@ -77,7 +89,7 @@ pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
 
 /// Execute the `plot` subcommand from `blobtk`.
 pub fn plot(options: &cli::PlotOptions) -> Result<(), Box<dyn std::error::Error>> {
-    let meta = blobdir::parse_blobdir(&options);
+    let meta = blobdir::parse_blobdir(&options.blobdir);
     let view = &options.view;
     match view {
         Some(cli::View::Snail) => plot_snail(&meta, &options),
