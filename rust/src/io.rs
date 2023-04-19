@@ -64,7 +64,6 @@ pub fn get_file_writer(file_path: &PathBuf) -> Box<dyn Write> {
     };
 
     let writer: Box<dyn Write> = if file_path.extension() == Some(OsStr::new("gz")) {
-        // Error is here: Created file isn't gzip-compressed
         Box::new(BufWriter::with_capacity(
             128 * 1024,
             write::GzEncoder::new(file, Compression::default()),

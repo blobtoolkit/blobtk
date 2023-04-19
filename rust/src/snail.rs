@@ -10,7 +10,7 @@ use rust_decimal::prelude::*;
 use serde;
 use serde::{Deserialize, Serialize};
 use svg::node::element::path::Data;
-use svg::node::element::{Circle, Group, Line, Path, Rectangle, Text};
+use svg::node::element::{Circle, Group, Line, Path, Rectangle, Text, SVG};
 use svg::node::Text as nodeText;
 use svg::Document;
 use titlecase::titlecase;
@@ -1030,7 +1030,7 @@ pub fn busco_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOptions) 
     legend(title, entries, Some(subtitle), 2)
 }
 
-pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
+pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
     let max_span = match options.max_span {
         Some(span) => span,
         None => snail_stats.span(),
@@ -1374,6 +1374,13 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
 
     let document = Document::new()
         .set("viewBox", (0, 0, 1000, 1000))
+        .add(
+            Rectangle::new()
+                .set("fill", "#ffffff")
+                .set("stroke", "none")
+                .set("width", 1000)
+                .set("height", 1000),
+        )
         .add(group)
         .add(busco_group)
         .add(scaf_stats_legend)
@@ -1382,7 +1389,10 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> () {
         .add(scale_legend)
         .add(dataset_legend);
 
-    svg::save(options.output.as_str(), &document).unwrap();
+    // svg::save(options.output.as_str(), &document).unwrap();
+    // let mut target = Vec::new();
+    // let svg_data = svg::write(target, &document).unwrap();
+    document
 }
 
 fn busco_plot(snail_stats: &SnailStats) -> Group {

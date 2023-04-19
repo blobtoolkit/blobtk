@@ -1,7 +1,9 @@
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
+use flate2::read::GzDecoder;
+use glob::glob;
 use serde;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
@@ -107,16 +109,32 @@ pub struct BuscoGene {
     pub status: String,
 }
 
-fn update_fields(field_list: &Vec<FieldMeta>) {}
+pub fn get_path(dir: &PathBuf, prefix: &str) -> Option<String> {
+    let mut path = dir.clone();
+    path.push(prefix);
+    for e in glob(&format!("{}*", path.to_string_lossy())).expect("Failed to read glob pattern") {
+        return Some(format!("{}", e.unwrap().to_string_lossy()));
+    }
+    None
+}
+
+pub fn file_reader(dir: &PathBuf, prefix: &str) -> Option<Box<dyn BufRead>> {
+    let path = match get_path(dir, prefix) {
+        Some(string) => string,
+        None => return None,
+    };
+    let file = File::open(&path).expect("no such file");
+
+    if path.ends_with(".gz") {
+        return Some(Box::new(BufReader::new(GzDecoder::new(file))));
+    } else {
+        return Some(Box::new(BufReader::new(file)));
+    };
+}
 
 pub fn parse_blobdir(options: &cli::PlotOptions) -> Meta {
-    let mut blob_meta = options.blobdir.clone();
-    blob_meta.push("meta.json");
-    let file = File::open(blob_meta).expect("no such file");
-    let reader = BufReader::new(file);
-
+    let reader = file_reader(&options.blobdir, "meta.json").unwrap();
     let mut meta: Meta = serde_json::from_reader(reader).expect("unable to parse json");
-    // println!("dataset {} has {} records", meta.id, meta.records);
     let mut fields: Vec<String> = vec![];
     let mut busco_fields: Vec<(String, usize, String)> = vec![];
     fn list_fields(
@@ -164,22 +182,8 @@ pub fn parse_blobdir(options: &cli::PlotOptions) -> Meta {
     meta
 }
 
-fn field_reader(id: &String, options: &cli::PlotOptions) -> Option<BufReader<File>> {
-    let mut field_data = options.blobdir.clone();
-    field_data.push(format!("{}.json", &id));
-    let file = match File::open(field_data) {
-        Ok(file) => file,
-        Err(err) => {
-            println!("No such file. {}.json could not be found", &id);
-            return None;
-        }
-    };
-    let reader = Some(BufReader::new(file));
-    reader
-}
-
 pub fn parse_field_busco(id: String, options: &cli::PlotOptions) -> Option<Vec<Vec<BuscoGene>>> {
-    let reader = match field_reader(&id, &options) {
+    let reader = match file_reader(&options.blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
         None => return None,
     };
@@ -202,7 +206,7 @@ pub fn parse_field_busco(id: String, options: &cli::PlotOptions) -> Option<Vec<V
 }
 
 pub fn parse_field_cat(id: String, options: &cli::PlotOptions) -> Option<Vec<String>> {
-    let reader = match field_reader(&id, &options) {
+    let reader = match file_reader(&options.blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
         None => return None,
     };
@@ -216,7 +220,7 @@ pub fn parse_field_cat(id: String, options: &cli::PlotOptions) -> Option<Vec<Str
 }
 
 pub fn parse_field_float(id: String, options: &cli::PlotOptions) -> Option<Vec<f64>> {
-    let reader = match field_reader(&id, &options) {
+    let reader = match file_reader(&options.blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
         None => return None,
     };
@@ -226,7 +230,7 @@ pub fn parse_field_float(id: String, options: &cli::PlotOptions) -> Option<Vec<f
 }
 
 pub fn parse_field_int(id: String, options: &cli::PlotOptions) -> Option<Vec<usize>> {
-    let reader = match field_reader(&id, &options) {
+    let reader = match file_reader(&options.blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
         None => return None,
     };
@@ -236,7 +240,7 @@ pub fn parse_field_int(id: String, options: &cli::PlotOptions) -> Option<Vec<usi
 }
 
 pub fn parse_field_string(id: String, options: &cli::PlotOptions) -> Option<Vec<String>> {
-    let reader = match field_reader(&id, &options) {
+    let reader = match file_reader(&options.blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
         None => return None,
     };

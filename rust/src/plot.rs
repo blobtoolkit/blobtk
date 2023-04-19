@@ -10,6 +10,35 @@ use crate::snail;
 // use crate::io;
 
 pub use cli::PlotOptions;
+use svg::Document;
+use usvg::{fontdb, TreeParsing, TreeTextToPath};
+
+pub fn save_svg(document: &Document, options: &PlotOptions) {
+    svg::save(options.output.as_str(), document).unwrap();
+}
+
+pub fn save_png(document: &Document, _: &PlotOptions) {
+    let mut fontdb = fontdb::Database::new();
+    fontdb.load_system_fonts();
+    let mut buf = Vec::new();
+    svg::write(&mut buf, document).unwrap();
+    // let output = std::str::from_utf8(buf.as_slice()).unwrap().to_string();
+    // dbg!(output);
+    let opt = usvg::Options::default();
+    let mut tree = usvg::Tree::from_data(&buf.as_slice(), &opt).unwrap();
+    tree.convert_text(&fontdb);
+
+    let pixmap_size = tree.size.to_screen_size();
+    let mut pixmap = tiny_skia::Pixmap::new(pixmap_size.width(), pixmap_size.height()).unwrap();
+    resvg::render(
+        &tree,
+        resvg::FitTo::Original,
+        tiny_skia::Transform::default(),
+        pixmap.as_mut(),
+    )
+    .unwrap();
+    pixmap.save_png("test.png").unwrap();
+}
 
 pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     // let busco_list = meta.busco_list.clone().unwrap();
@@ -36,7 +65,11 @@ pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
         record_type,
         &options,
     );
-    snail::svg(&snail_stats, &options)
+    let document: Document = snail::svg(&snail_stats, &options);
+
+    save_svg(&document, &options);
+
+    save_png(&document, &options);
 
     // let cats = blobdir::parse_field_cat("buscogenes_family".to_string(), &options);
     // let identifiers = blobdir::parse_field_string("identifiers".to_string(), &options);
