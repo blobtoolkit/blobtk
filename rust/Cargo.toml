@@ -32,6 +32,7 @@ panic = "abort"
 [dependencies]
 atty = "0.2.14"
 clap = { version = "4.0.29", features = [ "derive" ]}
+colorous = "1.0.10"
 coord_transforms = "1.4.0"
 flate2 = "1.0.25"
 glob = "0.3.1"

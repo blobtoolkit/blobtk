@@ -165,6 +165,13 @@ pub enum View {
     Snail,
 }
 
+#[derive(ValueEnum, Clone, Debug)]
+pub enum Palette {
+    Default,
+    Paired,
+    Viridis,
+}
+
 /// Options to pass to `blobtk plot`
 #[derive(Parser, Debug)]
 #[pyclass]
@@ -190,6 +197,30 @@ pub struct PlotOptions {
     /// max scaffold length for snail plot
     #[arg(long = "max-scaffold")]
     pub max_scaffold: Option<usize>,
+    /// X-axis field for blob plot
+    #[arg(long = "x-field", short = 'x')]
+    pub x_field: Option<String>,
+    /// Y-axis field for blob plot
+    #[arg(long = "y-field", short = 'y')]
+    pub y_field: Option<String>,
+    /// Z-axis field for blob plot
+    #[arg(long = "z-field", short = 'z')]
+    pub z_field: Option<String>,
+    /// Category field for blob plot
+    #[arg(long = "category", short = 'c')]
+    pub cat_field: Option<String>,
+    /// Maximum number of categories for blob/cumulative plot
+    #[arg(long = "cat-count", default_value_t = 10)]
+    pub cat_count: usize,
+    /// Category order for blob/cumulative plot (<cat1>,<cat2>,...)
+    #[arg(long = "cat-order")]
+    pub cat_order: Option<String>,
+    /// Colour palette for categories
+    #[arg(long, value_enum)]
+    pub palette: Option<Palette>,
+    /// Individual colours to modify palette (<index>=<hexcode>)
+    #[arg(long)]
+    pub color: Option<Vec<String>>,
 }
 
 /// Options to pass to `blobtk taxonomy`

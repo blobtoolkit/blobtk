@@ -31,9 +31,6 @@ pub mod plot;
 /// Python bindings.
 pub mod python;
 
-/// Snail plot functions.
-pub mod snail;
-
 /// Parse and subset a taxonomy.
 pub mod taxonomy;
 

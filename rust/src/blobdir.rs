@@ -46,6 +46,7 @@ pub struct FieldMeta {
     pub datatype: Option<String>,
     pub children: Option<Vec<FieldMeta>>,
     pub parent: Option<String>,
+    pub data: Option<Vec<FieldMeta>>, // TODO: treat as children when parsing
     pub count: Option<usize>,
     pub range: Option<Vec<f64>>,
     pub preload: Option<bool>,
@@ -54,7 +55,7 @@ pub struct FieldMeta {
     pub odb_set: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PlotMeta {
     pub x: Option<String>,
     pub y: Option<String>,
@@ -175,13 +176,14 @@ pub fn parse_blobdir(blobdir: &PathBuf) -> Meta {
         for f in field_list {
             // let iterable_headers: HashMap<String, String> =
             //     serde_json::from_value(serde_json::to_value(&f).unwrap()).unwrap();
-            let mut full = if parent.is_none() {
+            let full = if parent.is_none() {
                 f.clone()
             } else {
                 let mut tmp = FieldMeta {
                     id: f.id.clone(),
                     children: f.children.clone(),
                     parent: f.parent.clone(),
+                    data: f.data.clone(),
                     ..parent.unwrap().clone()
                 };
                 if f.field_type.is_some() {
@@ -235,6 +237,15 @@ pub fn parse_blobdir(blobdir: &PathBuf) -> Meta {
                     Some(&full),
                 )
             }
+            if f.data.is_some() {
+                list_fields(
+                    &f.data.clone().unwrap(),
+                    fields,
+                    busco_fields,
+                    busco_flag,
+                    Some(&full),
+                )
+            }
         }
     }
     list_fields(&meta.fields, &mut fields, &mut busco_fields, false, None);
@@ -274,16 +285,16 @@ pub fn parse_field_busco(id: String, blobdir: &PathBuf) -> Option<Vec<Vec<BuscoG
     Some(values)
 }
 
-pub fn parse_field_cat(id: String, blobdir: &PathBuf) -> Option<Vec<String>> {
+pub fn parse_field_cat(id: String, blobdir: &PathBuf) -> Option<Vec<(String, usize)>> {
     let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
         None => return None,
     };
     let field: Field<usize> = serde_json::from_reader(reader).expect("unable to parse json");
-    let mut values: Vec<String> = vec![];
+    let mut values: Vec<(String, usize)> = vec![];
     let keys = field.keys.clone();
     for value in field.values() {
-        values.push(keys[*value].clone())
+        values.push((keys[*value].clone(), *value))
     }
     Some(values)
 }
@@ -356,6 +367,7 @@ pub fn parse_filters(filters: &Vec<String>) -> HashMap<&str, Filter> {
     filter_map
 }
 
+// TODO: add filters for int and cat values
 pub fn filter_float_values(values: Vec<f64>, filter: Filter, indices: Vec<usize>) -> Vec<usize> {
     let initial: Vec<usize> = if indices.is_empty() {
         (0..(values.len() - 1)).collect()
@@ -431,10 +443,46 @@ pub fn apply_filter_busco(
     output
 }
 
-pub fn apply_filter_cat(values: &Vec<String>, indices: &Vec<usize>) -> Vec<String> {
+pub fn apply_filter_cat(
+    values: &Vec<(String, usize)>,
+    indices: &Vec<usize>,
+) -> Vec<(String, usize)> {
     let mut output = vec![];
     for i in indices {
         output.push(values[i.clone()].clone())
     }
     output
+}
+
+pub fn get_plot_values(
+    meta: &Meta,
+    blobdir: &PathBuf,
+    plot_map: &HashMap<String, String>,
+) -> (HashMap<String, Vec<f64>>, Vec<(String, usize)>) {
+    let mut plot_values = HashMap::new();
+    let mut cat_values = vec![];
+    let field_list = meta.field_list.clone().unwrap();
+    for (axis, id) in plot_map {
+        let field_meta_option = field_list.get(id);
+        match field_meta_option {
+            Some(field_meta) => {
+                let field = field_meta.clone();
+                if field.datatype.clone().unwrap() == "float" {
+                    let values = parse_field_float(field_meta.id.clone(), blobdir).unwrap();
+                    plot_values.insert(axis.clone(), values);
+                } else if field.datatype.clone().unwrap() == "integer" {
+                    let values: Vec<f64> = parse_field_int(field_meta.id.clone(), blobdir)
+                        .unwrap()
+                        .iter()
+                        .map(|x| x.clone() as f64)
+                        .collect();
+                    plot_values.insert(axis.clone(), values);
+                } else if field.field_type.clone().unwrap() == "category" && field.data.is_some() {
+                    cat_values = parse_field_cat(field_meta.id.clone(), blobdir).unwrap();
+                }
+            }
+            None => (),
+        };
+    }
+    (plot_values, cat_values)
 }
