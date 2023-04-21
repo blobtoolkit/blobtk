@@ -9,6 +9,7 @@ use serde;
 use serde::{Deserialize, Serialize};
 use serde_aux::prelude::*;
 use serde_json;
+use serde_with::{serde_as, DefaultOnError};
 use titlecase::titlecase;
 use url::Url;
 
@@ -37,6 +38,7 @@ pub struct AssemblyMeta {
     pub url: Option<Url>,
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FieldMeta {
     pub id: String,
@@ -46,9 +48,12 @@ pub struct FieldMeta {
     pub datatype: Option<String>,
     pub children: Option<Vec<FieldMeta>>,
     pub parent: Option<String>,
-    pub data: Option<Vec<FieldMeta>>, // TODO: treat as children when parsing
+    pub data: Option<Vec<FieldMeta>>,
     pub count: Option<usize>,
-    pub range: Option<Vec<f64>>,
+    pub range: Option<[f64; 2]>,
+    #[serde_as(deserialize_as = "DefaultOnError")]
+    #[serde(default)]
+    pub clamp: Option<f64>,
     pub preload: Option<bool>,
     pub active: Option<bool>,
     #[serde(rename = "set")]
@@ -413,6 +418,9 @@ pub fn set_filters(filters: HashMap<&str, Filter>, meta: &Meta, blobdir: &PathBu
             None => (),
         };
     }
+    if indices.is_empty() {
+        indices = (0..meta.records).collect();
+    }
     indices
 }
 
@@ -443,13 +451,10 @@ pub fn apply_filter_busco(
     output
 }
 
-pub fn apply_filter_cat(
-    values: &Vec<(String, usize)>,
-    indices: &Vec<usize>,
-) -> Vec<(String, usize)> {
+pub fn apply_filter_cat(values: &Vec<(String, usize)>, indices: &Vec<usize>) -> Vec<String> {
     let mut output = vec![];
     for i in indices {
-        output.push(values[i.clone()].clone())
+        output.push(values[i.clone()].clone().0)
     }
     output
 }

@@ -2,13 +2,11 @@
 //! Invoked by calling:
 //! `blobtk plot <args>`
 
-// use std::collections::HashMap;
-
-use std::borrow::BorrowMut;
 use std::collections::HashMap;
 
 use crate::blobdir;
 use crate::cli;
+use crate::plot::blob::BlobData;
 // use crate::io;
 
 pub use cli::PlotOptions;
@@ -16,11 +14,19 @@ use colorous;
 use svg::Document;
 use usvg::{fontdb, TreeParsing, TreeTextToPath};
 
+use self::blob::BlobDimensions;
+
 /// Blob plot functions.
 pub mod blob;
 
+/// Category functions.
+pub mod category;
+
 /// Chart components.
 pub mod component;
+
+/// Scatter plot functions.
+pub mod scatter;
 
 /// Snail plot functions.
 pub mod snail;
@@ -156,82 +162,6 @@ pub fn set_palette(
     color_list
 }
 
-#[derive(Clone, Debug)]
-pub struct Category {
-    label: String,
-    members: Vec<String>,
-    indices: Vec<usize>,
-    color: String,
-}
-
-pub fn set_cats(
-    values: &Vec<(String, usize)>,
-    order: &Option<String>,
-    count: &usize,
-    palette: &Vec<String>,
-) -> Vec<Category> {
-    let mut indices = HashMap::new();
-    let mut label_list = vec![];
-    for (i, entry) in values.iter().enumerate() {
-        label_list.push(entry.clone().0);
-        if !indices.contains_key(&entry.0) {
-            indices.insert(entry.clone().0, vec![i]);
-        } else {
-            let list = indices.get_mut(&entry.0).unwrap();
-            list.push(i);
-        }
-    }
-    let frequencies = values
-        .iter()
-        .map(|x| x.clone().0)
-        .fold(HashMap::new(), |mut map, val| {
-            map.entry(val).and_modify(|frq| *frq += 1).or_insert(1);
-            map
-        });
-    let mut sorted_cats: Vec<_> = frequencies.clone().into_iter().collect();
-    sorted_cats.sort_by(|x, y| y.1.cmp(&x.1));
-
-    let mut cat_order = vec![];
-    let mut index = 0;
-    if order.is_some() {
-        // TODO: prevent duplication when adding remaining cats
-        for entry in order.clone().unwrap().split(",") {
-            if frequencies.contains_key(entry) {
-                cat_order.push(Category {
-                    label: entry.to_string(),
-                    members: vec![],
-                    indices: vec![],
-                    color: palette[index].clone(),
-                });
-                index += 1;
-            }
-        }
-    }
-    for (label, _) in &sorted_cats {
-        if index < count - 1 || index == count - 1 && *count == sorted_cats.len() {
-            cat_order.push(Category {
-                label: label.clone(),
-                members: vec![label.clone()],
-                indices: indices[label].clone(),
-                color: palette[index].clone(),
-            });
-            index += 1
-        } else if cat_order.len() < *count {
-            cat_order.push(Category {
-                label: "other".to_string(),
-                members: vec![label.clone()],
-                indices: indices[label].clone(),
-                color: palette[count - 1].clone(),
-            });
-        } else {
-            let other_cat = cat_order[count - 1].borrow_mut();
-            other_cat.members.push(label.clone());
-            other_cat.indices.append(indices.get_mut(label).unwrap());
-        }
-    }
-    cat_order
-}
-
 pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     // let busco_list = meta.busco_list.clone().unwrap();
     let mut plot_meta: HashMap<String, String> = HashMap::new();
@@ -261,22 +191,36 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
 
     let palette = set_palette(&options.palette, &options.color, options.cat_count);
 
-    let cat_order = set_cats(
+    let (cat_order, cat_indices) = category::set_cat_order(
         &cat_values,
         &options.cat_order,
         &options.cat_count,
         &palette,
     );
-    dbg!(cat_order);
     // let id = meta.id.clone();
     // let record_type = meta.record_type.clone();
 
     let filters = blobdir::parse_filters(&options.filter);
     let wanted_indices = blobdir::set_filters(filters, &meta, &options.blobdir);
-    let x_filtered = blobdir::apply_filter_float(&plot_values["x"], &wanted_indices);
-    let y_filtered = blobdir::apply_filter_float(&plot_values["y"], &wanted_indices);
-    let z_filtered = blobdir::apply_filter_float(&plot_values["z"], &wanted_indices);
-    let cat_filtered = blobdir::apply_filter_cat(&cat_values, &wanted_indices);
+    let blob_data = BlobData {
+        x: blobdir::apply_filter_float(&plot_values["x"], &wanted_indices),
+        y: blobdir::apply_filter_float(&plot_values["y"], &wanted_indices),
+        z: blobdir::apply_filter_float(&plot_values["z"], &wanted_indices),
+        cat: blobdir::apply_filter_int(&cat_indices, &wanted_indices),
+        cat_order,
+    };
+
+    let scatter_data = blob::blob_points(plot_meta, blob_data, &meta, &options);
+
+    let dimensions = BlobDimensions {
+        ..Default::default()
+    };
+
+    let document: Document = blob::svg(&dimensions, &scatter_data, &options);
+
+    save_svg(&document, &options);
+
+    save_png(&document, &options);
 }
 
 /// Execute the `plot` subcommand from `blobtk`.

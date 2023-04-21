@@ -96,7 +96,13 @@ pub fn log_scale(value: usize, domain: &[usize; 2], range: &[f64; 2]) -> f64 {
 }
 
 pub fn log_scale_float(value: f64, domain: &[f64; 2], range: &[f64; 2]) -> f64 {
-    let proportion = (value - domain[0]).log10() / (domain[1] - domain[0]).log10();
+    let modifier = 1.0 / domain[0];
+    let proportion = if domain[0] >= 1.0 {
+        (value - domain[0]).log10() / (domain[1] - domain[0]).log10()
+    } else {
+        (value * modifier - domain[0] * modifier).log10()
+            / (domain[1] * modifier - domain[0] * modifier).log10()
+    };
     (range[1] - range[0]) * proportion + range[0]
 }
 
@@ -108,4 +114,28 @@ pub fn sqrt_scale(value: usize, domain: &[usize; 2], range: &[f64; 2]) -> f64 {
 pub fn sqrt_scale_float(value: f64, domain: &[f64; 2], range: &[f64; 2]) -> f64 {
     let proportion = (value - domain[0]).sqrt() / (domain[1] - domain[0]).sqrt();
     (range[1] - range[0]) * proportion + range[0]
+}
+
+pub fn scale_float(
+    value: f64,
+    domain: &[f64; 2],
+    range: &[f64; 2],
+    scale_type: &String,
+    clamp: Option<f64>,
+) -> f64 {
+    let scale_log = &String::from("scaleLog");
+    let scale_sqrt = &String::from("scaleLog");
+    if clamp.is_some() {
+        let clamp_value = clamp.unwrap();
+        if value < clamp_value {
+            return clamp_value;
+        }
+    }
+    if scale_type == scale_log {
+        log_scale_float(value, domain, range)
+    } else if scale_type == scale_sqrt {
+        linear_scale_float(value, domain, range)
+    } else {
+        linear_scale_float(value, domain, range)
+    }
 }

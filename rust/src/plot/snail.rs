@@ -451,12 +451,14 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
         &(min_length_tick as f64),
         &TickStatus::Major,
         &radius,
+        &"scaleSqrt".to_string(),
     );
     let minor_length_ticks = set_axis_ticks(
         &(max_scaffold as f64),
         &(min_length_tick as f64),
         &TickStatus::Minor,
         &radius,
+        &"scaleSqrt".to_string(),
     );
     let scaled_n50 = sqrt_scale(
         snail_stats.binned_scaffold_lengths()[n50_index],
