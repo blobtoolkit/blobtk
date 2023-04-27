@@ -673,7 +673,7 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
 
     for (i, tick) in major_length_ticks.iter().enumerate() {
         let tick = tick.clone();
-        let label = if major_length_ticks.len() > 3 && i < 2 {
+        let label = if i < major_length_ticks.len() - 3 {
             Text::new()
         } else {
             tick.label
