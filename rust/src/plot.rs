@@ -14,7 +14,11 @@ use colorous;
 use svg::Document;
 use usvg::{fontdb, TreeParsing, TreeTextToPath};
 
+use self::axis::AxisName;
 use self::blob::BlobDimensions;
+
+/// Plot axis functions.
+pub mod axis;
 
 /// Blob plot functions.
 pub mod blob;
@@ -26,7 +30,7 @@ pub mod category;
 pub mod component;
 
 /// Scatter plot functions.
-pub mod scatter;
+pub mod plot_data;
 
 /// Snail plot functions.
 pub mod snail;
@@ -47,11 +51,11 @@ pub fn save_png(document: &Document, _: &PlotOptions) {
     let mut tree = usvg::Tree::from_data(&buf.as_slice(), &opt).unwrap();
     tree.convert_text(&fontdb);
 
-    let pixmap_size = tree.size.to_screen_size();
-    let mut pixmap = tiny_skia::Pixmap::new(pixmap_size.width(), pixmap_size.height()).unwrap();
+    // let pixmap_size = tree.size.to_screen_size();
+    let mut pixmap = tiny_skia::Pixmap::new(2000, 2000).unwrap();
     resvg::render(
         &tree,
-        resvg::FitTo::Original,
+        resvg::FitTo::Size(2000, 2000),
         tiny_skia::Transform::default(),
         pixmap.as_mut(),
     )
@@ -210,13 +214,27 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
         cat_order,
     };
 
-    let scatter_data = blob::blob_points(plot_meta, blob_data, &meta, &options);
+    let scatter_data = blob::blob_points(plot_meta, &blob_data, &meta, &options);
 
     let dimensions = BlobDimensions {
         ..Default::default()
     };
 
-    let document: Document = blob::svg(&dimensions, &scatter_data, &options);
+    let (x_bins, x_max) = blob::bin_axis(
+        &scatter_data,
+        &blob_data,
+        AxisName::X,
+        &dimensions,
+        &options,
+    );
+    let (y_bins, y_max) = blob::bin_axis(
+        &scatter_data,
+        &blob_data,
+        AxisName::Y,
+        &dimensions,
+        &options,
+    );
+    let document: Document = blob::svg(&dimensions, &scatter_data, &x_bins, &y_bins, &options);
 
     save_svg(&document, &options);
 

@@ -7,9 +7,11 @@ use svg::node::element::path::Data;
 use svg::node::element::{Circle, Group, Line, Path, Rectangle, Text};
 use svg::node::Text as nodeText;
 
-use crate::utils::{format_si, linear_scale, linear_scale_float, scale_float};
+use crate::utils::{format_si, linear_scale, linear_scale_float, scale_float, scale_floats};
 
-use super::scatter::ScatterAxis;
+use super::axis::{self, AxisOptions, Position, Scale, ScatterAxis, TickOptions, TickStatus};
+use super::blob::BlobDimensions;
+use super::plot_data::{self, HistogramData};
 
 #[derive(Clone, Debug)]
 pub struct RadialTick {
@@ -29,31 +31,6 @@ pub struct Tick {
     pub path: Path,
     pub position: f64,
     pub status: TickStatus,
-}
-
-#[derive(Clone, Debug)]
-pub struct TickOptions {
-    pub font_size: f64,
-    pub font_color: String,
-    pub show_secondary_tick: bool,
-    pub status: TickStatus,
-}
-
-impl Default for TickOptions {
-    fn default() -> TickOptions {
-        TickOptions {
-            font_size: 20.0,
-            font_color: "black".to_string(),
-            show_secondary_tick: false,
-            status: TickStatus::Major,
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum TickStatus {
-    Major,
-    Minor,
 }
 
 #[derive(Clone, Debug)]
@@ -258,32 +235,83 @@ pub fn set_tick(
     }
 }
 
-pub fn set_tick_horiz(
+pub fn create_tick(
     value: f64,
     label: String,
-    domain: &[f64; 2],
     range: &[f64; 2],
-    status: &TickStatus,
-    scale: &String,
+    axis_options: &AxisOptions,
+    tick_options: &TickOptions,
 ) -> Tick {
-    let offset = scale_float(value, &domain, &range, &scale, None);
-    let path = match status {
-        TickStatus::Major => {
-            path_axis_major(Data::new().move_to((offset, 10)).line_to((offset, 0)), None)
-        }
-        TickStatus::Minor => {
-            path_axis_minor(Data::new().move_to((offset, 5)).line_to((offset, 0)), None)
-        }
+    let location = scale_floats(
+        value,
+        &axis_options.domain,
+        &range,
+        &axis_options.scale,
+        None,
+    );
+    let (x1, y1, x2, y2, x_text, y_text, anchor, baseline, angle) = match axis_options.position {
+        Position::TOP => (
+            location,
+            axis_options.offset,
+            location,
+            axis_options.offset - tick_options.length,
+            location,
+            axis_options.offset - tick_options.length * 1.5,
+            "middle",
+            "auto",
+            0.0,
+        ),
+        Position::RIGHT => (
+            axis_options.offset,
+            location,
+            axis_options.offset + tick_options.length,
+            location,
+            axis_options.offset + tick_options.length * 1.5,
+            location,
+            "middle",
+            "hanging",
+            270.0,
+        ),
+        Position::BOTTOM => (
+            location,
+            axis_options.offset,
+            location,
+            axis_options.offset + tick_options.length,
+            location,
+            axis_options.offset + tick_options.length * 1.5,
+            "middle",
+            "hanging",
+            0.0,
+        ),
+        Position::LEFT => (
+            axis_options.offset,
+            location,
+            axis_options.offset - tick_options.length,
+            location,
+            axis_options.offset - tick_options.length * 1.5,
+            location,
+            "middle",
+            "hanging",
+            90.0,
+        ),
     };
-    let text = match status {
+    let path_data = Data::new().move_to((x1, y1)).line_to((x2, y2));
+    let path = match tick_options.status {
+        TickStatus::Major => path_axis_major(path_data, Some(&axis_options.color)),
+        TickStatus::Minor => path_axis_minor(path_data, Some(&axis_options.color)),
+    };
+    let text = match tick_options.status {
         TickStatus::Major => Text::new()
             .set("font-family", "Roboto, Open sans, sans-serif")
-            .set("font-size", "20")
-            .set("text-anchor", "middle")
-            .set("dominant-baseline", "hanging")
+            .set("font-size", tick_options.font_size)
+            .set("text-anchor", anchor)
+            .set("dominant-baseline", baseline)
             .set("stroke", "none")
-            .set("fill", "black")
-            .set("transform", format!("translate({:?}, {:?})", offset, 15,))
+            .set("fill", axis_options.color.clone())
+            .set(
+                "transform",
+                format!("translate({:?}, {:?}) rotate({:?})", x_text, y_text, angle),
+            )
             .add(nodeText::new(label)),
         TickStatus::Minor => Text::new(),
     };
@@ -291,12 +319,137 @@ pub fn set_tick_horiz(
     Tick {
         label: text,
         path,
-        position: offset,
-        status: match status {
-            TickStatus::Major => TickStatus::Major,
-            TickStatus::Minor => TickStatus::Minor,
-        },
+        position: location,
+        status: tick_options.status.clone(),
     }
+}
+
+pub fn create_axis_ticks(options: &AxisOptions, status: TickStatus) -> Vec<Tick> {
+    let range = [
+        options.range[0] + options.padding[0],
+        options.range[1] + options.padding[0],
+    ];
+    let domain = options.domain;
+
+    let mut power: i32 = 0;
+    let mut min_value = domain[0].clone().abs();
+    let mut min_val = domain[0].clone().abs();
+    if min_val == 0.0 && options.clamp.is_some() {
+        min_value = options.clamp.unwrap().clone();
+        min_val = options.clamp.unwrap().clone();
+    }
+
+    if min_val > 1.0 {
+        while min_val > 1.0 {
+            power += 1;
+            min_val /= 10.0;
+        }
+    } else if min_val > 0.0 {
+        while min_val < 1.0 {
+            power -= 1;
+            min_val *= 10.0;
+        }
+    }
+    let mut ticks: Vec<Tick> = vec![];
+    match options.scale {
+        Scale::LOG => {
+            let diff = domain[1].log10() - min_value.log10();
+            let step = if diff > 11.0 { 100.0 } else { 10.0 };
+            match status {
+                TickStatus::Major => {
+                    let mut i = 10u32.pow(power.abs() as u32) as f64;
+                    if power < 0 {
+                        i = 1.0 / i;
+                    }
+                    if min_value.clone() < 0.0 {
+                        i = -i
+                    }
+                    while i <= domain[1].clone() {
+                        let label = if i > min_value.clone() {
+                            format_si(&i, 3)
+                        } else {
+                            String::new()
+                        };
+                        ticks.push(create_tick(
+                            i,
+                            label,
+                            &range,
+                            &options,
+                            &options.major_ticks,
+                        ));
+                        i = i * step;
+                    }
+                }
+                TickStatus::Minor => {
+                    let mut i = 10u32.pow((power.abs() - 1) as u32) as f64;
+                    if power < 0 {
+                        i = 1.0 / i;
+                    }
+                    if min_value.clone() < 0.0 {
+                        i = -i
+                    }
+                    while i <= domain[1].clone() {
+                        let mut j = i * 2.0;
+                        while j < i * 10.0 && j <= domain[1].clone() {
+                            if j as f64 >= min_value {
+                                ticks.push(create_tick(
+                                    j,
+                                    "".to_string(),
+                                    &range,
+                                    &options,
+                                    &options.minor_ticks,
+                                ));
+                            }
+                            j = j + i;
+                        }
+                        i = i * 10.0;
+                    }
+                }
+            }
+        }
+        Scale::LINEAR => {
+            let diff = domain[1] - min_value;
+            let step = diff / 100.0;
+            // let round_step =
+            let divisor = 0.1
+                * if power < 0 {
+                    1.0 / 10u32.pow(power.abs() as u32) as f64
+                } else {
+                    10u32.pow(power.abs() as u32) as f64
+                };
+            let mut step = divisor.clone();
+            let mut index = 0;
+            let steps = [1.0, 2.0, 2.5, 5.0, 10.0];
+            while diff / step > 10.0 {
+                index += 1;
+                step = divisor * steps[index];
+            }
+            match status {
+                TickStatus::Major => {
+                    let mut i = step * (min_value / step).ceil();
+                    while i <= domain[1].clone() {
+                        let label = if i > min_value.clone() {
+                            format_si(&i, 3)
+                        } else {
+                            String::new()
+                        };
+                        ticks.push(create_tick(
+                            i,
+                            label,
+                            &range,
+                            &options,
+                            &options.major_ticks,
+                        ));
+                        i += step;
+                    }
+                }
+                TickStatus::Minor => {}
+            }
+        }
+        _ => {}
+    };
+
+    ticks
 }
 
 pub fn set_axis_ticks(
@@ -341,11 +494,7 @@ pub fn set_axis_ticks(
                 } else {
                     String::new()
                 };
-                if false {
-                    ticks.push(set_tick_horiz(i, label, &domain, &range, &status, &scale));
-                } else {
-                    ticks.push(set_tick(i, label, &domain, &range, &status, &scale));
-                }
+                ticks.push(set_tick(i, label, &domain, &range, &status, &scale));
                 i = i * 10.0;
             }
         }
@@ -428,7 +577,7 @@ pub fn set_tick_circular(
         polar2cartesian(&Vector2::new(tick_distances[3], angle)),
     ];
     let outer_point = polar2cartesian(&Vector2::new(tick_distances[3] + 4.0, angle));
-    let tick_path_data = if options.show_secondary_tick {
+    let tick_path_data = if options.show_minor_tick {
         Data::new()
             .move_to((tick_points[0][0], tick_points[0][1]))
             .line_to((tick_points[1][0], tick_points[1][1]))
@@ -774,39 +923,62 @@ pub fn polar_to_path_bounded(
     path_data
 }
 
-pub fn x_axis(scatter_axis: &ScatterAxis) -> Group {
-    let major_ticks = set_axis_ticks(
-        &scatter_axis.domain[1],
-        &scatter_axis.domain[0],
-        &TickStatus::Major,
-        &(scatter_axis.range[1] - scatter_axis.range[0]),
-        &scatter_axis.scale,
-    );
+pub fn chart_axis(scatter_axis: &AxisOptions) -> Group {
+    // let major_ticks = set_axis_ticks(
+    //     &scatter_axis.domain[1],
+    //     &scatter_axis.domain[0],
+    //     &TickStatus::Major,
+    //     &(scatter_axis.range[1] - scatter_axis.range[0]),
+    //     &scatter_axis.scale,
+    // );
+    let major_ticks = create_axis_ticks(&scatter_axis, TickStatus::Major);
     let mut major_tick_group = Group::new();
     for tick in major_ticks {
         major_tick_group = major_tick_group.add(tick.path).add(tick.label);
     }
 
-    let minor_ticks = set_axis_ticks(
-        &scatter_axis.domain[1],
-        &scatter_axis.domain[0],
-        &TickStatus::Minor,
-        &(scatter_axis.range[1] - scatter_axis.range[0]),
-        &scatter_axis.scale,
-    );
+    let minor_ticks = create_axis_ticks(&scatter_axis, TickStatus::Minor);
     let mut minor_tick_group = Group::new();
     for tick in minor_ticks {
         minor_tick_group = minor_tick_group.add(tick.path);
     }
 
+    let (x1, y1, x2, y2) = match scatter_axis.position {
+        Position::TOP => (
+            scatter_axis.range[0],
+            scatter_axis.offset,
+            scatter_axis.range[1] + scatter_axis.padding[0] + scatter_axis.padding[1],
+            scatter_axis.offset,
+        ),
+        Position::RIGHT => (
+            scatter_axis.offset,
+            scatter_axis.range[0],
+            scatter_axis.offset,
+            scatter_axis.range[1] + scatter_axis.padding[0] + scatter_axis.padding[1],
+        ),
+        Position::BOTTOM => (
+            scatter_axis.range[0],
+            scatter_axis.offset,
+            scatter_axis.range[1] + scatter_axis.padding[0] + scatter_axis.padding[1],
+            scatter_axis.offset,
+        ),
+        Position::LEFT => (
+            scatter_axis.offset,
+            scatter_axis.range[1],
+            scatter_axis.offset,
+            scatter_axis.range[0] + scatter_axis.padding[0] + scatter_axis.padding[1],
+        ),
+    };
+
     let axis = Line::new()
         .set("fill", "none")
         .set("stroke", "black")
-        .set("stroke-width", 3)
-        .set("x1", scatter_axis.range[0])
-        .set("y1", 0.0)
-        .set("x2", scatter_axis.range[1])
-        .set("y2", 0.0);
+        .set("stroke-width", scatter_axis.weight)
+        .set("stroke-linecap", "round")
+        .set("x1", x1)
+        .set("y1", y1)
+        .set("x2", x2)
+        .set("y2", y2);
 
     Group::new()
         .add(minor_tick_group)
@@ -814,42 +986,12 @@ pub fn x_axis(scatter_axis: &ScatterAxis) -> Group {
         .add(axis)
 }
 
-pub fn y_axis(scatter_axis: &ScatterAxis) -> Group {
-    let major_ticks = set_axis_ticks(
-        &scatter_axis.domain[1],
-        &scatter_axis.domain[0],
-        &TickStatus::Major,
-        &(scatter_axis.range[1] - scatter_axis.range[0]),
-        &scatter_axis.scale,
-    );
-    let mut major_tick_group = Group::new();
-    for tick in major_ticks {
-        major_tick_group = major_tick_group.add(tick.path).add(tick.label);
+pub fn hist_paths(hist_data: &Vec<HistogramData>, x_range: [f64; 2], y_range: [f64; 2]) {
+    let x_domain = [0.0, hist_data[0].bins.len() as f64];
+    for hist in hist_data.iter() {
+        let mut path = Data::new().move_to((x_range[0], y_range[0]));
+        for (i, bin) in hist.bins.iter().enumerate() {
+            // TODO: set y domain and scale histogram
+        }
     }
-
-    let minor_ticks = set_axis_ticks(
-        &scatter_axis.domain[1],
-        &scatter_axis.domain[0],
-        &TickStatus::Minor,
-        &(scatter_axis.range[1] - scatter_axis.range[0]),
-        &scatter_axis.scale,
-    );
-    let mut minor_tick_group = Group::new();
-    for tick in minor_ticks {
-        minor_tick_group = minor_tick_group.add(tick.path);
-    }
-
-    let axis = Line::new()
-        .set("fill", "none")
-        .set("stroke", "black")
-        .set("stroke-width", 3)
-        .set("x1", 0.0)
-        .set("y1", scatter_axis.range[0])
-        .set("x2", 0.0)
-        .set("y2", scatter_axis.range[1]);
-
-    Group::new()
-        .add(minor_tick_group)
-        .add(major_tick_group)
-        .add(axis)
 }

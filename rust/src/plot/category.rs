@@ -36,7 +36,13 @@ pub fn set_cat_order(
             map
         });
     let mut sorted_cats: Vec<_> = frequencies.clone().into_iter().collect();
-    sorted_cats.sort_by(|x, y| y.1.cmp(&x.1));
+    sorted_cats.sort_by(|x, y| {
+        if x.1 == y.1 {
+            x.0.partial_cmp(&y.0).unwrap()
+        } else {
+            y.1.cmp(&x.1)
+        }
+    });
 
     let mut cat_order = vec![];
     let mut index = 0;

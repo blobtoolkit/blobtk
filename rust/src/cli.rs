@@ -208,7 +208,12 @@ pub struct PlotOptions {
     pub z_field: Option<String>,
     /// Category field for blob plot
     #[arg(long = "category", short = 'c')]
+    /// Category field for blob plot
+    #[arg(long = "category", short = 'c')]
     pub cat_field: Option<String>,
+    /// Resolution for blob plot
+    #[arg(long, default_value_t = 30)]
+    pub resolution: usize,
     /// Maximum number of categories for blob/cumulative plot
     #[arg(long = "cat-count", default_value_t = 10)]
     pub cat_count: usize,

@@ -4,23 +4,22 @@ use std::f64::consts::PI;
 
 use serde;
 use serde::{Deserialize, Serialize};
-use svg::node::element::{Group, Line, Path, Rectangle};
+use svg::node::element::{Group, Line, Path, Rectangle, Text};
 use svg::Document;
 use titlecase::titlecase;
 
 use crate::blobdir::{self, BuscoGene};
 
+use super::axis::{TickOptions, TickStatus};
+use super::component::{
+    arc_path, legend, path_axis_major, path_axis_minor, path_gridline_major, path_gridline_minor,
+    polar_to_path, polar_to_path_bounded, set_axis_ticks, set_axis_ticks_circular, LegendShape,
+};
+use super::style::{path_filled, path_open, path_partial};
 use crate::cli;
-use crate::plot;
 use crate::utils::{
     self, compact_float, format_si, linear_scale, linear_scale_float, log_scale, sqrt_scale,
 };
-use plot::component::{
-    arc_path, legend, path_axis_major, path_axis_minor, path_gridline_major, path_gridline_minor,
-    polar_to_path, polar_to_path_bounded, set_axis_ticks, set_axis_ticks_circular, LegendShape,
-    TickOptions, TickStatus,
-};
-use plot::style::{path_filled, path_open, path_partial};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SummaryStats {
@@ -413,6 +412,12 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
     let radius: f64 = 375.0;
     let outer_radius: f64 = 450.0;
     let bin_count = snail_stats.binned_scaffold_lengths().len();
+    let min_scaffold = snail_stats.binned_scaffold_lengths()[bin_count - 1];
+    let mut magnitude = (min_scaffold.clone() as f64).log10() as u32;
+    if magnitude > 1 {
+        magnitude -= 1;
+    }
+    let min_value = 10u32.pow(magnitude) as usize;
 
     let max_radians: f64 = PI * 1.9999999 * snail_stats.span() as f64 / max_span as f64;
     let n50_index = (bin_count / 2) - 1;
@@ -428,7 +433,7 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
         outer_radius,
         snail_stats.span(),
         TickOptions {
-            show_secondary_tick: true,
+            show_minor_tick: true,
             ..Default::default()
         },
     );
@@ -441,33 +446,32 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
         outer_radius,
         snail_stats.span(),
         TickOptions {
-            show_secondary_tick: true,
+            show_minor_tick: true,
             ..Default::default()
         },
     );
-    let min_length_tick = snail_stats.binned_scaffold_lengths()[bin_count - 1];
     let major_length_ticks = set_axis_ticks(
         &(max_scaffold as f64),
-        &(min_length_tick as f64),
+        &(min_value as f64),
         &TickStatus::Major,
         &radius,
         &"scaleSqrt".to_string(),
     );
     let minor_length_ticks = set_axis_ticks(
         &(max_scaffold as f64),
-        &(min_length_tick as f64),
+        &(min_value as f64),
         &TickStatus::Minor,
         &radius,
         &"scaleSqrt".to_string(),
     );
     let scaled_n50 = sqrt_scale(
         snail_stats.binned_scaffold_lengths()[n50_index],
-        &[0, max_scaffold],
+        &[min_value, max_scaffold],
         &[radius, 0.0],
     );
     let scaled_n90 = sqrt_scale(
         snail_stats.binned_scaffold_lengths()[n90_index],
-        &[0, max_scaffold],
+        &[min_value, max_scaffold],
         &[radius, 0.0],
     );
 
@@ -486,7 +490,7 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
     let mut polar_outer_n_coords: Vec<Vec<f64>> = vec![];
     let mut polar_inner_n_max_coords: Vec<Vec<f64>> = vec![];
     let mut polar_outer_n_max_coords: Vec<Vec<f64>> = vec![];
-    let scaf_count_domain = [0, 10000000000];
+    let scaf_count_domain = [1, 10000000000];
     let scaf_count_range = [0.0, radius];
     for i in 0..bin_count {
         // angle
@@ -496,7 +500,7 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
         let scaf_length_polar: Vec<f64> = vec![
             sqrt_scale(
                 snail_stats.binned_scaffold_lengths()[i],
-                &[0, max_scaffold],
+                &[min_value, max_scaffold],
                 &[radius, 0.0],
             ),
             angle,
@@ -667,8 +671,14 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
     let mut major_length_tick_group = Group::new();
     let mut major_length_gridline_group = Group::new();
 
-    for tick in major_length_ticks {
-        major_length_tick_group = major_length_tick_group.add(tick.path).add(tick.label);
+    for (i, tick) in major_length_ticks.iter().enumerate() {
+        let tick = tick.clone();
+        let label = if major_length_ticks.len() > 3 && i < 2 {
+            Text::new()
+        } else {
+            tick.label
+        };
+        major_length_tick_group = major_length_tick_group.add(tick.path).add(label);
         let arc_data = arc_path(
             -1.0 * tick.position,
             None,
