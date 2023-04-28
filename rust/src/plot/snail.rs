@@ -131,11 +131,12 @@ fn count_buscos(
         let busco_id = busco.id;
         if busco.status == "Fragmented".to_string() {
             busco_frag.insert(busco_id.clone());
+        } else {
+            if busco_list.contains(&busco_id) {
+                busco_dup.insert(busco_id.clone());
+            }
+            busco_list.insert(busco_id);
         }
-        if busco_list.contains(&busco_id) {
-            busco_dup.insert(busco_id.clone());
-        }
-        busco_list.insert(busco_id);
     }
 }
 

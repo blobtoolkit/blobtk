@@ -26,11 +26,28 @@ pub mod compact_float {
     }
 }
 
+/// # Examples
+///
+/// ```
+/// # use crate::blobtk::utils::format_si;
+/// assert_eq!(format_si(&123456.0, 1), "100k");
+/// assert_eq!(format_si(&123456.0, 2), "120k");
+/// assert_eq!(format_si(&123456.0, 3), "123k");
+/// assert_eq!(format_si(&123456.0, 4), "123.5k");
+/// assert_eq!(format_si(&12.3, 3), "12.3");
+/// assert_eq!(format_si(&12.3, 2), "12");
+/// assert_eq!(format_si(&0.02655, 3), "0.03");
+/// assert_eq!(format_si(&0.021, 3), "0.02");
+/// assert_eq!(format_si(&0.02, 1), "0");
+/// assert_eq!(format_si(&0.0002, 3), "200μ");
+/// assert_eq!(format_si(&0.000246, 2), "250μ");
+/// assert_eq!(format_si(&0.00000246, 2), "2.5μ");
+/// ```
 pub fn format_si(value: &f64, digits: u32) -> String {
     fn set_suffix(thousands: i8) -> String {
         const POSITIVE: [&str; 9] = ["", "k", "M", "G", "T", "P", "E", "Z", "Y"];
-        const NEGATIVE: [&str; 9] = ["", "m", "μ", "p", "n", "f", "a", "z", "y"];
-        let suffix = if thousands < 0 && thousands >= -9 {
+        const NEGATIVE: [&str; 8] = ["", "μ", "p", "n", "f", "a", "z", "y"];
+        let suffix = if thousands < 0 && thousands >= -8 {
             NEGATIVE[(thousands * -1) as usize]
         } else if thousands >= 0 && thousands <= 9 {
             POSITIVE[thousands as usize]
@@ -41,18 +58,24 @@ pub fn format_si(value: &f64, digits: u32) -> String {
     }
 
     let magnitude = (value.clone()).log10() as i8;
+    let prefix;
     let thousands = magnitude / 3;
-    let prefix = if thousands < 0 {
-        value.clone()
+    if thousands < 0 {
+        prefix = value.clone() * 10u32.pow(3 * (thousands.abs() as u32 + 1)) as f64;
     } else {
-        value.clone() / 10u32.pow(3 * thousands as u32) as f64
+        prefix = value.clone() / 10u32.pow(3 * thousands as u32) as f64
     };
     let d = Decimal::from_f64_retain(prefix).unwrap();
-    let rounded = d
+    let mut rounded = d
         .round_sf_with_strategy(digits, RoundingStrategy::MidpointAwayFromZero)
         .unwrap()
         .normalize()
         .to_string();
+    if thousands == 0 && rounded.starts_with("0.") {
+        let rounded_value = (rounded.parse::<f64>().unwrap() * 1000.0).round() / 1000.0;
+        let digits_usize = &(digits as usize - 1);
+        rounded = format!("{:.digits_usize$}", rounded_value);
+    }
 
     let suffix = set_suffix(thousands);
     format!("{}{}", rounded, suffix)
@@ -121,7 +144,7 @@ pub fn log_scale_float(value: f64, domain: &[f64; 2], range: &[f64; 2]) -> f64 {
 /// assert_eq!(sqrt_scale(4, &domain, &range), 25.0);
 /// assert_eq!(sqrt_scale(9, &domain, &range), 50.0);
 /// assert_eq!(sqrt_scale(16, &domain, &range), 75.0);
-/// assert_eq!(sqrt_scale(25, &domain, &range), 100.0);å
+/// assert_eq!(sqrt_scale(25, &domain, &range), 100.0);
 /// ```
 
 pub fn sqrt_scale(value: usize, domain: &[usize; 2], range: &[f64; 2]) -> f64 {
