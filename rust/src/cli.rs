@@ -168,7 +168,7 @@ pub enum View {
 #[derive(ValueEnum, Clone, Debug)]
 pub enum Palette {
     Default,
-    Paired,
+    Inverse,
     Viridis,
 }
 

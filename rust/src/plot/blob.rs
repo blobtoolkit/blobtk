@@ -12,10 +12,11 @@ use crate::{blobdir, cli, plot};
 
 use plot::category::Category;
 
-use super::axis::{AxisName, AxisOptions, Position, Scale};
+use super::axis::{AxisName, AxisOptions, ChartAxes, Position, Scale};
+use super::chart::{Chart, Dimensions};
 use super::component::{chart_axis, hist_paths};
-use super::plot_data::{self, Bin, HistogramData, ScatterData, ScatterPoint};
-use super::style::path_filled;
+use super::data::{self, Bin, HistogramData, ScatterData, ScatterPoint};
+use super::style::{path_filled, path_open};
 
 #[derive(Clone, Debug)]
 pub struct BlobData {
@@ -43,13 +44,13 @@ impl Default for BlobDimensions {
             width: 900.0,
             margin: [10.0, 10.0, 100.0, 100.0],
             padding: [50.0, 50.0, 50.0, 50.0],
-            hist_height: 200.0,
-            hist_width: 200.0,
+            hist_height: 250.0,
+            hist_width: 250.0,
         }
     }
 }
 
-fn scale_values_new(data: &Vec<f64>, meta: &AxisOptions) -> Vec<f64> {
+fn scale_values(data: &Vec<f64>, meta: &AxisOptions) -> Vec<f64> {
     let mut scaled = vec![];
     for value in data {
         scaled.push(scale_floats(
@@ -78,10 +79,9 @@ pub fn bin_axis(
     };
     let bin_size = (range[1] - range[0]) / options.resolution as f64;
     let mut binned = vec![vec![0.0; options.resolution]; options.cat_count];
-    let z_values = &blob_data.z;
     let mut max_bin = 0.0;
-    for (i, cat_index) in blob_data.cat.iter().enumerate() {
-        let point = &scatter_data.points[i];
+    for point in scatter_data.points.iter() {
+        let cat_index = point.cat_index;
         let mut bin = match axis {
             AxisName::X => ((point.x - range[0]) / bin_size).floor() as usize,
             AxisName::Y => ((point.y - range[0]) / bin_size).floor() as usize,
@@ -91,8 +91,8 @@ pub fn bin_axis(
         if bin == options.resolution {
             bin -= 1;
         }
-        binned[*cat_index][bin] += z_values[i];
-        max_bin = max_float(max_bin, binned[*cat_index][bin]);
+        binned[cat_index][bin] += blob_data.z[point.data_index];
+        max_bin = max_float(max_bin, binned[cat_index][bin]);
     }
     let width = dimensions.width / options.resolution as f64;
     let domain = [0.0, max_bin];
@@ -103,6 +103,7 @@ pub fn bin_axis(
     let mut histograms = vec![
         HistogramData {
             max_bin,
+            width: dimensions.width,
             ..Default::default()
         };
         blob_data.cat_order.len()
@@ -117,7 +118,8 @@ pub fn bin_axis(
                     value: *value,
                 })
                 .collect(),
-            max_bin,
+            max_bin: scale_floats(max_bin, &domain, &range, &Scale::LINEAR, None),
+            width: dimensions.width,
             axis: axis.clone(),
             category: Some(cat.clone()),
         }
@@ -153,17 +155,14 @@ pub fn blob_points(
         position: Position::BOTTOM,
         label: axes["x"].clone(),
         padding: [dimensions.padding[3], dimensions.padding[1]],
-        offset: dimensions.height
-            + dimensions.hist_height
-            + dimensions.padding[0]
-            + dimensions.padding[2],
+        offset: dimensions.height + dimensions.padding[0] + dimensions.padding[2],
         scale: Scale::from_str(&x_meta.scale.unwrap()).unwrap(),
         domain: x_meta.range.unwrap(),
         range: [0.0, dimensions.width],
         clamp: x_clamp,
         ..Default::default()
     };
-    let x_scaled = scale_values_new(&blob_data.x, &x_axis);
+    let x_scaled = scale_values(&blob_data.x, &x_axis);
 
     let y_meta = fields[axes["y"].as_str()].clone();
     let mut y_domain = y_meta.range.unwrap();
@@ -181,17 +180,14 @@ pub fn blob_points(
     let y_axis = AxisOptions {
         position: Position::LEFT,
         label: axes["y"].clone(),
-        padding: [dimensions.padding[0], dimensions.padding[2]],
+        padding: [dimensions.padding[2], dimensions.padding[0]],
         scale: Scale::from_str(&y_meta.scale.unwrap()).unwrap(),
         domain: y_domain,
-        range: [
-            dimensions.height + dimensions.hist_height,
-            dimensions.hist_height,
-        ],
+        range: [dimensions.height, 0.0],
         clamp: y_clamp,
         ..Default::default()
     };
-    let y_scaled = scale_values_new(&blob_data.y, &y_axis);
+    let y_scaled = scale_values(&blob_data.y, &y_axis);
 
     let z_meta = fields[axes["z"].as_str()].clone();
     let z_axis = AxisOptions {
@@ -201,7 +197,7 @@ pub fn blob_points(
         range: [2.0, dimensions.height / 15.0],
         ..Default::default()
     };
-    let z_scaled = scale_values_new(&blob_data.z, &z_axis);
+    let z_scaled = scale_values(&blob_data.z, &z_axis);
 
     let mut points = vec![];
     let cat_order = blob_data.cat_order.clone();
@@ -214,6 +210,8 @@ pub fn blob_points(
             z: z_scaled[i],
             label: Some(cat.label.clone()),
             color: Some(cat.color.clone()),
+            cat_index: *cat_index,
+            data_index: i,
         })
     }
     for cat_points in ordered_points {
@@ -226,6 +224,189 @@ pub fn blob_points(
         z: z_axis,
         categories: blob_data.cat_order.clone(),
     }
+}
+
+pub fn plot(
+    blob_dimensions: BlobDimensions,
+    scatter_data: ScatterData,
+    hist_data_x: Vec<HistogramData>,
+    hist_data_y: Vec<HistogramData>,
+    x_max: f64,
+    y_max: f64,
+    options: &cli::PlotOptions,
+) -> Document {
+    let height = blob_dimensions.height
+        + blob_dimensions.hist_height
+        + blob_dimensions.margin[0]
+        + blob_dimensions.margin[2]
+        + blob_dimensions.padding[0]
+        + blob_dimensions.padding[2];
+
+    let width = blob_dimensions.width
+        + blob_dimensions.hist_width
+        + blob_dimensions.margin[1]
+        + blob_dimensions.margin[3]
+        + blob_dimensions.padding[1]
+        + blob_dimensions.padding[3];
+    let x_opts = scatter_data.x.clone();
+    let y_opts = scatter_data.y.clone();
+
+    let scatter = Chart {
+        axes: ChartAxes {
+            x: Some(x_opts.clone()),
+            y: Some(y_opts.clone()),
+            ..Default::default()
+        },
+        scatter_data: Some(scatter_data),
+        dimensions: Dimensions {
+            height: blob_dimensions.height,
+            width: blob_dimensions.width,
+            margin: blob_dimensions.margin,
+            padding: blob_dimensions.padding,
+        },
+        ..Default::default()
+    };
+
+    let x_hist = Chart {
+        axes: ChartAxes {
+            x: Some(AxisOptions {
+                offset: blob_dimensions.hist_height,
+                ..x_opts.clone()
+            }),
+            y: Some(AxisOptions {
+                position: Position::LEFT,
+                label: "sum length".to_string(),
+                scale: Scale::LINEAR,
+                domain: [0.0, x_max],
+                range: [blob_dimensions.hist_height, 0.0],
+                ..Default::default()
+            }),
+            x2: Some(AxisOptions {
+                offset: 0.0,
+                position: Position::TOP,
+                major_ticks: None,
+                minor_ticks: None,
+                ..x_opts.clone()
+            }),
+            y2: Some(AxisOptions {
+                position: Position::RIGHT,
+                offset: blob_dimensions.width
+                    + blob_dimensions.padding[1]
+                    + blob_dimensions.padding[3],
+                scale: Scale::LINEAR,
+                domain: [0.0, x_max],
+                range: [blob_dimensions.hist_height, 0.0],
+                major_ticks: None,
+                minor_ticks: None,
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        histogram_data: Some(hist_data_x),
+        dimensions: Dimensions {
+            height: blob_dimensions.hist_height,
+            width: blob_dimensions.width,
+            margin: [0.0, 0.0, 0.0, 0.0],
+            padding: [
+                0.0,
+                blob_dimensions.padding[1],
+                0.0,
+                blob_dimensions.padding[3],
+            ],
+        },
+        ..Default::default()
+    };
+
+    let y_hist = Chart {
+        axes: ChartAxes {
+            x: Some(AxisOptions {
+                offset: 0.0,
+                ..y_opts.clone()
+            }),
+            y: Some(AxisOptions {
+                position: Position::BOTTOM,
+                offset: blob_dimensions.height
+                    + blob_dimensions.padding[0]
+                    + blob_dimensions.padding[2],
+                label: "sum length".to_string(),
+                scale: Scale::LINEAR,
+                domain: [0.0, y_max],
+                range: [0.0, blob_dimensions.hist_width],
+                ..Default::default()
+            }),
+
+            x2: Some(AxisOptions {
+                offset: blob_dimensions.hist_width,
+                position: Position::RIGHT,
+                major_ticks: None,
+                minor_ticks: None,
+                ..y_opts.clone()
+            }),
+            y2: Some(AxisOptions {
+                position: Position::TOP,
+                offset: 0.0,
+                scale: Scale::LINEAR,
+                domain: [0.0, y_max],
+                range: [0.0, blob_dimensions.hist_width],
+                major_ticks: None,
+                minor_ticks: None,
+                ..Default::default()
+            }),
+
+            ..Default::default()
+        },
+        histogram_data: Some(hist_data_y),
+        dimensions: Dimensions {
+            height: blob_dimensions.hist_width,
+            width: blob_dimensions.height,
+            margin: [0.0, 0.0, 0.0, 0.0],
+            padding: [
+                blob_dimensions.padding[0],
+                0.0,
+                blob_dimensions.padding[2],
+                0.0,
+            ],
+        },
+        ..Default::default()
+    };
+
+    let document = Document::new()
+        .set("viewBox", (0, 0, width, height))
+        .add(
+            Rectangle::new()
+                .set("fill", "#ffffff")
+                .set("stroke", "none")
+                .set("width", width)
+                .set("height", height),
+        )
+        .add(scatter.svg().set(
+            "transform",
+            format!(
+                "translate({}, {})",
+                blob_dimensions.margin[3],
+                blob_dimensions.hist_height + blob_dimensions.margin[0]
+            ),
+        ))
+        .add(x_hist.svg().set(
+            "transform",
+            format!(
+                "translate({}, {})",
+                blob_dimensions.margin[3], blob_dimensions.margin[0]
+            ),
+        ))
+        .add(y_hist.svg().set(
+            "transform",
+            format!(
+                "translate({}, {})",
+                blob_dimensions.margin[3]
+                    + blob_dimensions.width
+                    + blob_dimensions.padding[1]
+                    + blob_dimensions.padding[3],
+                blob_dimensions.hist_height + blob_dimensions.margin[0]
+            ),
+        ));
+
+    document
 }
 
 pub fn svg(
@@ -257,14 +438,34 @@ pub fn svg(
         "transform",
         format!(
             "translate({}, {})",
-            dimensions.padding[3],
-            dimensions.padding[0] + dimensions.hist_height
+            dimensions.padding[3], dimensions.hist_height
         ),
     );
     for hist in hist_data_x {
         let color;
         color = hist.category.clone().unwrap().color;
-        x_hist_group = x_hist_group.add(path_filled(hist.clone().to_path_data(true), Some(&color)));
+        x_hist_group = x_hist_group.add(path_open(
+            hist.clone().to_path_data(Position::BOTTOM, false),
+            Some(&color),
+            None,
+        ));
+    }
+
+    let mut y_hist_group = Group::new().set(
+        "transform",
+        format!(
+            "translate({}, {})",
+            dimensions.width + dimensions.padding[3] + dimensions.margin[3],
+            dimensions.height + dimensions.padding[0] + dimensions.hist_width
+        ),
+    );
+    for hist in hist_data_y {
+        let color;
+        color = hist.category.clone().unwrap().color;
+        y_hist_group = y_hist_group.add(path_filled(
+            hist.clone().to_path_data(Position::LEFT, true),
+            Some(&color),
+        ));
     }
 
     // let x_hist = hist_paths(
@@ -289,6 +490,7 @@ pub fn svg(
         )
         .add(scatter_group)
         .add(x_hist_group)
+        .add(y_hist_group)
         .add(x_axis)
         .add(y_axis);
     let height = dimensions.height

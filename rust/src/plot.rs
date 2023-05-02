@@ -26,11 +26,14 @@ pub mod blob;
 /// Category functions.
 pub mod category;
 
+/// Chart options.
+pub mod chart;
+
 /// Chart components.
 pub mod component;
 
 /// Scatter plot functions.
-pub mod plot_data;
+pub mod data;
 
 /// Snail plot functions.
 pub mod snail;
@@ -51,11 +54,12 @@ pub fn save_png(document: &Document, _: &PlotOptions) {
     let mut tree = usvg::Tree::from_data(&buf.as_slice(), &opt).unwrap();
     tree.convert_text(&fontdb);
 
-    // let pixmap_size = tree.size.to_screen_size();
-    let mut pixmap = tiny_skia::Pixmap::new(2000, 2000).unwrap();
+    let width = 2000;
+    let height = (width as f64 * tree.size.height() / tree.size.width()) as u32;
+    let mut pixmap = tiny_skia::Pixmap::new(width, height).unwrap();
     resvg::render(
         &tree,
-        resvg::FitTo::Size(2000, 2000),
+        resvg::FitTo::Size(width, height),
         tiny_skia::Transform::default(),
         pixmap.as_mut(),
     )
@@ -110,16 +114,33 @@ pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     // let identifiers = blobdir::parse_field_string("identifiers".to_string(), &options);
 }
 
+/// Convert a colorous::Color to 6 digit hex string
+/// # Examples
+///
+/// ```
+/// # use colorous::Color;
+/// # use crate::blobtk::plot::color_to_hex;
+/// assert_eq!(color_to_hex(Color {r: 255, g: 127, b: 0}), "#ff7f00");
 pub fn color_to_hex(color: colorous::Color) -> String {
-    format!("#{:x}{:x}{:x}", color.r, color.g, color.b)
+    format!("#{:02x}{:02x}{:02x}", color.r, color.g, color.b)
+}
+
+pub fn reverse_palette(count: usize) -> Vec<String> {
+    let gradient = colorous::PAIRED;
+    let mut list = vec![];
+    for i in 0..count {
+        let mut j = if i % 2 == 1 { i - 1 } else { i + 1 };
+        j = j % 12;
+        list.push(color_to_hex(gradient[j]));
+    }
+    list
 }
 
 pub fn default_palette(count: usize) -> Vec<String> {
     let gradient = colorous::PAIRED;
     let mut list = vec![];
     for i in 0..count {
-        let mut j = if i % 2 == 1 { i - 1 } else { i + 1 };
-        j = j % 12;
+        let j = i % 12;
         list.push(color_to_hex(gradient[j]));
     }
     list
@@ -131,23 +152,14 @@ pub fn set_palette(
     count: usize,
 ) -> Vec<String> {
     let mut color_list = match name {
-        Some(cli::Palette::Default) => default_palette(count),
-        Some(cli::Palette::Paired) => {
-            let gradient = colorous::PAIRED;
-            let mut list = vec![];
-            for i in 0..count {
-                let j = i % 12;
-                list.push(color_to_hex(gradient[j]));
-            }
-            list
-        }
+        Some(cli::Palette::Default) | None => default_palette(count),
+        Some(cli::Palette::Inverse) => reverse_palette(count),
         Some(cli::Palette::Viridis) => {
             let gradient = colorous::VIRIDIS;
             (0..count)
                 .map(|i| color_to_hex(gradient.eval_rational(i, count)))
                 .collect()
         }
-        None => default_palette(count),
     };
     if colors.is_some() {
         for color in colors.clone().unwrap() {
@@ -234,7 +246,17 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
         &dimensions,
         &options,
     );
-    let document: Document = blob::svg(&dimensions, &scatter_data, &x_bins, &y_bins, &options);
+    // let document: Document = blob::svg(&dimensions, &scatter_data, &x_bins, &y_bins, &options);
+
+    let document: Document = blob::plot(
+        dimensions,
+        scatter_data,
+        x_bins,
+        y_bins,
+        x_max,
+        y_max,
+        &options,
+    );
 
     save_svg(&document, &options);
 

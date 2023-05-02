@@ -4,7 +4,7 @@ use std::str::FromStr;
 pub struct TickOptions {
     pub font_size: f64,
     pub font_color: String,
-    pub show_minor_tick: bool,
+    pub label_ticks: bool,
     pub weight: f64,
     pub length: f64,
     pub rotate: f64,
@@ -16,7 +16,7 @@ impl Default for TickOptions {
         TickOptions {
             font_size: 20.0,
             font_color: "black".to_string(),
-            show_minor_tick: false,
+            label_ticks: false,
             weight: 2.0,
             length: 10.0,
             rotate: 0.0,
@@ -108,8 +108,8 @@ pub struct AxisOptions {
     pub domain: [f64; 2],
     pub range: [f64; 2],
     pub clamp: Option<f64>,
-    pub major_ticks: TickOptions,
-    pub minor_ticks: TickOptions,
+    pub major_ticks: Option<TickOptions>,
+    pub minor_ticks: Option<TickOptions>,
 }
 
 impl Default for AxisOptions {
@@ -126,15 +126,15 @@ impl Default for AxisOptions {
             domain: [0.0, 1.0],
             range: [0.0, 100.0],
             clamp: None,
-            major_ticks: TickOptions {
+            major_ticks: Some(TickOptions {
                 ..Default::default()
-            },
-            minor_ticks: TickOptions {
+            }),
+            minor_ticks: Some(TickOptions {
                 status: TickStatus::Minor,
                 weight: 1.0,
                 length: 5.0,
                 ..Default::default()
-            },
+            }),
         }
     }
 }
@@ -152,6 +152,25 @@ impl FromStr for TickStatus {
             "major" => Ok(TickStatus::Major),
             "minor" => Ok(TickStatus::Minor),
             _ => Err(()),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ChartAxes {
+    pub x: Option<AxisOptions>,
+    pub y: Option<AxisOptions>,
+    pub x2: Option<AxisOptions>,
+    pub y2: Option<AxisOptions>,
+}
+
+impl Default for ChartAxes {
+    fn default() -> ChartAxes {
+        ChartAxes {
+            x: None,
+            y: None,
+            x2: None,
+            y2: None,
         }
     }
 }

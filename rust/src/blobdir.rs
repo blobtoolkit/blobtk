@@ -38,6 +38,15 @@ pub struct AssemblyMeta {
     pub url: Option<Url>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum Datatype {
+    Float,
+    Integer,
+    Mixed,
+    String,
+}
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FieldMeta {
@@ -45,7 +54,7 @@ pub struct FieldMeta {
     #[serde(rename = "type")]
     pub field_type: Option<String>,
     pub scale: Option<String>,
-    pub datatype: Option<String>,
+    pub datatype: Option<Datatype>,
     pub children: Option<Vec<FieldMeta>>,
     pub parent: Option<String>,
     pub data: Option<Vec<FieldMeta>>,
@@ -402,6 +411,35 @@ pub fn filter_float_values(values: Vec<f64>, filter: Filter, indices: Vec<usize>
     output
 }
 
+pub fn filter_int_values(values: Vec<usize>, filter: Filter, indices: Vec<usize>) -> Vec<usize> {
+    let initial: Vec<usize> = if indices.is_empty() {
+        (0..(values.len() - 1)).collect()
+    } else {
+        indices.clone()
+    };
+    let mut output = vec![];
+    for i in initial {
+        let mut keep = true;
+        if filter.max.is_some() {
+            if values[i] as f64 > filter.max.unwrap() {
+                keep = false;
+            }
+        }
+        if filter.min.is_some() {
+            if (values[i] as f64) < filter.min.unwrap() {
+                keep = false;
+            }
+        }
+        if filter.invert {
+            keep = !keep;
+        }
+        if keep {
+            output.push(i);
+        }
+    }
+    output
+}
+
 pub fn set_filters(filters: HashMap<&str, Filter>, meta: &Meta, blobdir: &PathBuf) -> Vec<usize> {
     let mut indices = vec![];
     let field_list = meta.field_list.clone().unwrap();
@@ -410,9 +448,17 @@ pub fn set_filters(filters: HashMap<&str, Filter>, meta: &Meta, blobdir: &PathBu
         match field_meta_option {
             Some(field_meta) => {
                 let field = field_meta.clone();
-                if field.datatype.unwrap() == "float" {
-                    let values = parse_field_float(field_meta.id.clone(), blobdir).unwrap();
-                    indices = filter_float_values(values, filter, indices);
+                match field.datatype {
+                    Some(Datatype::Float) => {
+                        let values = parse_field_float(field_meta.id.clone(), blobdir).unwrap();
+                        indices = filter_float_values(values, filter, indices);
+                    }
+                    Some(Datatype::Integer) => {
+                        let values = parse_field_int(field_meta.id.clone(), blobdir).unwrap();
+                        indices = filter_int_values(values, filter, indices);
+                    }
+                    Some(_) => (),
+                    None => (),
                 }
             }
             None => (),
@@ -472,18 +518,26 @@ pub fn get_plot_values(
         match field_meta_option {
             Some(field_meta) => {
                 let field = field_meta.clone();
-                if field.datatype.clone().unwrap() == "float" {
-                    let values = parse_field_float(field_meta.id.clone(), blobdir).unwrap();
-                    plot_values.insert(axis.clone(), values);
-                } else if field.datatype.clone().unwrap() == "integer" {
-                    let values: Vec<f64> = parse_field_int(field_meta.id.clone(), blobdir)
-                        .unwrap()
-                        .iter()
-                        .map(|x| x.clone() as f64)
-                        .collect();
-                    plot_values.insert(axis.clone(), values);
-                } else if field.field_type.clone().unwrap() == "category" && field.data.is_some() {
-                    cat_values = parse_field_cat(field_meta.id.clone(), blobdir).unwrap();
+                match field.datatype {
+                    Some(Datatype::Float) => {
+                        let values = parse_field_float(field_meta.id.clone(), blobdir).unwrap();
+                        plot_values.insert(axis.clone(), values);
+                    }
+                    Some(Datatype::Integer) => {
+                        let values: Vec<f64> = parse_field_int(field_meta.id.clone(), blobdir)
+                            .unwrap()
+                            .iter()
+                            .map(|x| x.clone() as f64)
+                            .collect();
+                        plot_values.insert(axis.clone(), values);
+                    }
+                    Some(Datatype::String) => {
+                        if field.data.is_some() {
+                            cat_values = parse_field_cat(field_meta.id.clone(), blobdir).unwrap();
+                        }
+                    }
+                    Some(_) => (),
+                    None => (),
                 }
             }
             None => (),

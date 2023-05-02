@@ -434,7 +434,7 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
         outer_radius,
         snail_stats.span(),
         TickOptions {
-            show_minor_tick: true,
+            label_ticks: true,
             ..Default::default()
         },
     );
@@ -447,7 +447,7 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
         outer_radius,
         snail_stats.span(),
         TickOptions {
-            show_minor_tick: true,
+            label_ticks: true,
             ..Default::default()
         },
     );

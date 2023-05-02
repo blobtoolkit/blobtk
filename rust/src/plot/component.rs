@@ -11,7 +11,7 @@ use crate::utils::{format_si, linear_scale, linear_scale_float, scale_float, sca
 
 use super::axis::{self, AxisOptions, Position, Scale, ScatterAxis, TickOptions, TickStatus};
 use super::blob::BlobDimensions;
-use super::plot_data::{self, HistogramData};
+use super::data::{self, HistogramData};
 
 #[derive(Clone, Debug)]
 pub struct RadialTick {
@@ -375,7 +375,7 @@ pub fn create_axis_ticks(options: &AxisOptions, status: TickStatus) -> Vec<Tick>
                             label,
                             &range,
                             &options,
-                            &options.major_ticks,
+                            &options.major_ticks.as_ref().unwrap(),
                         ));
                         i = i * step;
                     }
@@ -397,7 +397,7 @@ pub fn create_axis_ticks(options: &AxisOptions, status: TickStatus) -> Vec<Tick>
                                     "".to_string(),
                                     &range,
                                     &options,
-                                    &options.minor_ticks,
+                                    &options.minor_ticks.as_ref().unwrap(),
                                 ));
                             }
                             j = j + i;
@@ -409,7 +409,6 @@ pub fn create_axis_ticks(options: &AxisOptions, status: TickStatus) -> Vec<Tick>
         }
         Scale::LINEAR => {
             let diff = domain[1] - min_value;
-            let step = diff / 100.0;
             // let round_step =
             let divisor = 0.1
                 * if power < 0 {
@@ -418,11 +417,13 @@ pub fn create_axis_ticks(options: &AxisOptions, status: TickStatus) -> Vec<Tick>
                     10u32.pow(power.abs() as u32) as f64
                 };
             let mut step = divisor.clone();
-            let mut index = 0;
-            let steps = [1.0, 2.0, 2.5, 5.0, 10.0];
+            let steps = [2.0, 2.5, 5.0, 10.0];
+            let mut multiple = 1.0;
             while diff / step > 10.0 {
-                index += 1;
-                step = divisor * steps[index];
+                for (i, _) in steps.iter().enumerate() {
+                    step = divisor * steps[i] * multiple;
+                }
+                multiple *= 10.0;
             }
             match status {
                 TickStatus::Major => {
@@ -438,7 +439,7 @@ pub fn create_axis_ticks(options: &AxisOptions, status: TickStatus) -> Vec<Tick>
                             label,
                             &range,
                             &options,
-                            &options.major_ticks,
+                            &options.major_ticks.as_ref().unwrap(),
                         ));
                         i += step;
                     }
@@ -577,7 +578,7 @@ pub fn set_tick_circular(
         polar2cartesian(&Vector2::new(tick_distances[3], angle)),
     ];
     let outer_point = polar2cartesian(&Vector2::new(tick_distances[3] + 4.0, angle));
-    let tick_path_data = if options.show_minor_tick {
+    let tick_path_data = if options.label_ticks {
         Data::new()
             .move_to((tick_points[0][0], tick_points[0][1]))
             .line_to((tick_points[1][0], tick_points[1][1]))
@@ -923,7 +924,7 @@ pub fn polar_to_path_bounded(
     path_data
 }
 
-pub fn chart_axis(scatter_axis: &AxisOptions) -> Group {
+pub fn chart_axis(plot_axis: &AxisOptions) -> Group {
     // let major_ticks = set_axis_ticks(
     //     &scatter_axis.domain[1],
     //     &scatter_axis.domain[0],
@@ -931,49 +932,53 @@ pub fn chart_axis(scatter_axis: &AxisOptions) -> Group {
     //     &(scatter_axis.range[1] - scatter_axis.range[0]),
     //     &scatter_axis.scale,
     // );
-    let major_ticks = create_axis_ticks(&scatter_axis, TickStatus::Major);
     let mut major_tick_group = Group::new();
-    for tick in major_ticks {
-        major_tick_group = major_tick_group.add(tick.path).add(tick.label);
-    }
+    if plot_axis.major_ticks.is_some() {
+        let major_ticks = create_axis_ticks(&plot_axis, TickStatus::Major);
+        for tick in major_ticks {
+            major_tick_group = major_tick_group.add(tick.path).add(tick.label);
+        }
+    };
 
-    let minor_ticks = create_axis_ticks(&scatter_axis, TickStatus::Minor);
     let mut minor_tick_group = Group::new();
-    for tick in minor_ticks {
-        minor_tick_group = minor_tick_group.add(tick.path);
+    if plot_axis.minor_ticks.is_some() {
+        let minor_ticks = create_axis_ticks(&plot_axis, TickStatus::Minor);
+        for tick in minor_ticks {
+            minor_tick_group = minor_tick_group.add(tick.path);
+        }
     }
 
-    let (x1, y1, x2, y2) = match scatter_axis.position {
+    let (x1, y1, x2, y2) = match plot_axis.position {
         Position::TOP => (
-            scatter_axis.range[0],
-            scatter_axis.offset,
-            scatter_axis.range[1] + scatter_axis.padding[0] + scatter_axis.padding[1],
-            scatter_axis.offset,
+            plot_axis.range[0],
+            plot_axis.offset,
+            plot_axis.range[1] + plot_axis.padding[0] + plot_axis.padding[1],
+            plot_axis.offset,
         ),
         Position::RIGHT => (
-            scatter_axis.offset,
-            scatter_axis.range[0],
-            scatter_axis.offset,
-            scatter_axis.range[1] + scatter_axis.padding[0] + scatter_axis.padding[1],
+            plot_axis.offset,
+            plot_axis.range[1],
+            plot_axis.offset,
+            plot_axis.range[0] + plot_axis.padding[0] + plot_axis.padding[1],
         ),
         Position::BOTTOM => (
-            scatter_axis.range[0],
-            scatter_axis.offset,
-            scatter_axis.range[1] + scatter_axis.padding[0] + scatter_axis.padding[1],
-            scatter_axis.offset,
+            plot_axis.range[0],
+            plot_axis.offset,
+            plot_axis.range[1] + plot_axis.padding[0] + plot_axis.padding[1],
+            plot_axis.offset,
         ),
         Position::LEFT => (
-            scatter_axis.offset,
-            scatter_axis.range[1],
-            scatter_axis.offset,
-            scatter_axis.range[0] + scatter_axis.padding[0] + scatter_axis.padding[1],
+            plot_axis.offset,
+            plot_axis.range[1],
+            plot_axis.offset,
+            plot_axis.range[0] + plot_axis.padding[0] + plot_axis.padding[1],
         ),
     };
 
     let axis = Line::new()
         .set("fill", "none")
         .set("stroke", "black")
-        .set("stroke-width", scatter_axis.weight)
+        .set("stroke-width", plot_axis.weight)
         .set("stroke-linecap", "round")
         .set("x1", x1)
         .set("y1", y1)
