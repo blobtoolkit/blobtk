@@ -108,6 +108,7 @@ pub struct AxisOptions {
     pub clamp: Option<f64>,
     pub rotate: bool,
     pub tick_labels: bool,
+    pub tick_count: usize,
     pub major_ticks: Option<TickOptions>,
     pub minor_ticks: Option<TickOptions>,
 }
@@ -128,6 +129,7 @@ impl Default for AxisOptions {
             clamp: None,
             rotate: false,
             tick_labels: true,
+            tick_count: 10,
             major_ticks: Some(TickOptions {
                 ..Default::default()
             }),

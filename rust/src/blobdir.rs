@@ -18,12 +18,17 @@ use crate::cli;
 
 pub use cli::PlotOptions;
 
+fn default_accession() -> String {
+    "draft".to_string()
+}
+
 fn default_level() -> String {
     "scaffold".to_string()
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AssemblyMeta {
+    #[serde(default = "default_accession")]
     pub accession: String,
     #[serde(default = "default_level")]
     pub level: String,
@@ -97,7 +102,9 @@ pub struct Meta {
     pub name: String,
     pub record_type: String,
     pub records: usize,
+    #[serde(default = "default_revision")]
     pub revision: u8,
+    #[serde(default = "default_version")]
     pub version: u8,
     pub assembly: AssemblyMeta,
     pub fields: Vec<FieldMeta>,
@@ -105,6 +112,14 @@ pub struct Meta {
     pub taxon: TaxonMeta,
     pub field_list: Option<HashMap<String, FieldMeta>>,
     pub busco_list: Option<Vec<(String, usize, String)>>,
+}
+
+fn default_revision() -> u8 {
+    0
+}
+
+fn default_version() -> u8 {
+    1
 }
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -372,6 +372,7 @@ pub fn create_axis_ticks(options: &AxisOptions, status: TickStatus) -> Vec<Tick>
             min_val *= 10.0;
         }
     }
+    let target = options.tick_count as f64;
     let mut ticks: Vec<Tick> = vec![];
     match options.scale {
         Scale::LOG => {
@@ -441,12 +442,16 @@ pub fn create_axis_ticks(options: &AxisOptions, status: TickStatus) -> Vec<Tick>
             let mut step = divisor.clone();
             let steps = [2.0, 2.5, 5.0, 10.0];
             let mut multiple = 1.0;
-            while diff / step > 10.0 {
+            while diff / step > target {
                 for (i, _) in steps.iter().enumerate() {
                     step = divisor * steps[i] * multiple;
+                    if diff / step <= target {
+                        break;
+                    }
                 }
                 multiple *= 10.0;
             }
+
             match status {
                 TickStatus::Major => {
                     let mut i = step * (min_value / step).ceil();
@@ -947,13 +952,6 @@ pub fn polar_to_path_bounded(
 }
 
 pub fn chart_axis(plot_axis: &AxisOptions) -> Group {
-    // let major_ticks = set_axis_ticks(
-    //     &scatter_axis.domain[1],
-    //     &scatter_axis.domain[0],
-    //     &TickStatus::Major,
-    //     &(scatter_axis.range[1] - scatter_axis.range[0]),
-    //     &scatter_axis.scale,
-    // );
     let mut major_tick_group = Group::new();
     if plot_axis.major_ticks.is_some() {
         let major_ticks = create_axis_ticks(&plot_axis, TickStatus::Major);
@@ -970,30 +968,42 @@ pub fn chart_axis(plot_axis: &AxisOptions) -> Group {
         }
     }
 
-    let (x1, y1, x2, y2) = match plot_axis.position {
+    let (x1, y1, x2, y2, label_x, label_y, label_rotate) = match plot_axis.position {
         Position::TOP => (
             plot_axis.range[0],
             plot_axis.offset,
             plot_axis.range[1] + plot_axis.padding[0] + plot_axis.padding[1],
             plot_axis.offset,
+            (plot_axis.range[1] + plot_axis.range[0]) / 2.0 + plot_axis.padding[0],
+            plot_axis.offset - 20.0,
+            0.0,
         ),
         Position::RIGHT => (
             plot_axis.offset,
             plot_axis.range[1],
             plot_axis.offset,
             plot_axis.range[0] + plot_axis.padding[0] + plot_axis.padding[1],
+            plot_axis.offset + 20.0,
+            (plot_axis.range[1] + plot_axis.range[0]) / 2.0 + plot_axis.padding[0],
+            90.0,
         ),
         Position::BOTTOM => (
             plot_axis.range[0],
             plot_axis.offset,
             plot_axis.range[1] + plot_axis.padding[0] + plot_axis.padding[1],
             plot_axis.offset,
+            (plot_axis.range[1] + plot_axis.range[0]) / 2.0 + plot_axis.padding[0],
+            plot_axis.offset - 20.0,
+            0.0,
         ),
         Position::LEFT => (
             plot_axis.offset,
             plot_axis.range[1],
             plot_axis.offset,
             plot_axis.range[0] + plot_axis.padding[0] + plot_axis.padding[1],
+            plot_axis.offset + 20.0,
+            (plot_axis.range[1] + plot_axis.range[0]) / 2.0 + plot_axis.padding[0],
+            90.0,
         ),
     };
 
@@ -1007,8 +1017,25 @@ pub fn chart_axis(plot_axis: &AxisOptions) -> Group {
         .set("x2", x2)
         .set("y2", y2);
 
+    let label = Text::new()
+        .set("font-family", "Roboto, Open sans, sans-serif")
+        .set("font-size", "20")
+        .set("text-anchor", "middle")
+        .set("dominant-baseline", "central")
+        .set("stroke", "none")
+        .set("fill", "black")
+        .set(
+            "transform",
+            format!(
+                "translate({:?}, {:?}) rotate({:?})",
+                label_x, label_y, label_rotate
+            ),
+        )
+        .add(nodeText::new(plot_axis.label.clone()));
+
     Group::new()
         .add(minor_tick_group)
         .add(major_tick_group)
         .add(axis)
+        .add(label)
 }

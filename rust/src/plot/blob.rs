@@ -185,6 +185,7 @@ pub fn blob_points(
         domain: y_domain,
         range: [dimensions.height, 0.0],
         clamp: y_clamp,
+        rotate: true,
         ..Default::default()
     };
     let y_scaled = scale_values(&blob_data.y, &y_axis);
@@ -288,8 +289,9 @@ pub fn plot(
                 label: "sum length".to_string(),
                 scale: Scale::LINEAR,
                 domain: [0.0, x_max],
-                rotate: true,
                 range: [blob_dimensions.hist_height, 0.0],
+                rotate: true,
+                tick_count: 5,
                 ..Default::default()
             }),
             x2: Some(AxisOptions {
@@ -344,6 +346,8 @@ pub fn plot(
                 scale: Scale::LINEAR,
                 domain: [0.0, y_max],
                 range: [0.0, blob_dimensions.hist_width],
+                tick_count: 5,
+                rotate: true,
                 ..Default::default()
             }),
 

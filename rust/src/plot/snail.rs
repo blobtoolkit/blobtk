@@ -765,13 +765,13 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
                 .set("width", 1000)
                 .set("height", 1000),
         )
-        .add(group)
-        .add(busco_group)
         .add(scaf_stats_legend)
         .add(comp_stats_legend)
         .add(busc_stats_legend)
         .add(scale_legend)
-        .add(dataset_legend);
+        .add(dataset_legend)
+        .add(group)
+        .add(busco_group);
 
     // svg::save(options.output.as_str(), &document).unwrap();
     // let mut target = Vec::new();
