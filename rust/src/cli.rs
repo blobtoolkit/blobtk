@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use clap::{ArgGroup, Parser, Subcommand};
+use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 use pyo3::pyclass;
 
 // fn float_range(s: &str, min: f64, max: f64) -> Result<f64, String> {
@@ -55,6 +55,12 @@ pub enum SubCommand {
     /// Filter files based on list of sequence names.
     /// Called as `blobtk filter`
     Filter(FilterOptions),
+    /// Process a BlobDir and produce static plots.
+    /// Called as `blobtk plot`
+    Plot(PlotOptions),
+    /// Process a taxonomy and lookup lineages.
+    /// Called as `blobtk taxonomy`
+    Taxonomy(TaxonomyOptions),
 }
 
 /// Options to pass to `blobtk depth`
@@ -150,6 +156,88 @@ pub struct FilterOptions {
     /// Path to output list of read IDs
     #[arg(long = "read-list", short = 'O', value_name = "TXT")]
     pub read_list: Option<PathBuf>,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum View {
+    Blob,
+    Cumulative,
+    Snail,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum Palette {
+    Default,
+    Inverse,
+    Viridis,
+}
+
+/// Options to pass to `blobtk plot`
+#[derive(Parser, Debug)]
+#[pyclass]
+pub struct PlotOptions {
+    /// Path to BlobDir directory
+    #[arg(long, short = 'd')]
+    pub blobdir: PathBuf,
+    /// View to plot
+    #[arg(long, short = 'v')]
+    #[clap(value_enum)]
+    pub view: Option<View>,
+    /// Output filename
+    #[arg(long, short = 'o', default_value_t = String::from("output.svg"))]
+    pub output: String,
+    #[arg(long, short = 'f')]
+    pub filter: Vec<String>,
+    /// Segment count for snail plot
+    #[arg(long, short = 's', default_value_t = 1000)]
+    pub segments: usize,
+    /// Max span for snail plot
+    #[arg(long = "max-span")]
+    pub max_span: Option<usize>,
+    /// max scaffold length for snail plot
+    #[arg(long = "max-scaffold")]
+    pub max_scaffold: Option<usize>,
+    /// X-axis field for blob plot
+    #[arg(long = "x-field", short = 'x')]
+    pub x_field: Option<String>,
+    /// Y-axis field for blob plot
+    #[arg(long = "y-field", short = 'y')]
+    pub y_field: Option<String>,
+    /// Z-axis field for blob plot
+    #[arg(long = "z-field", short = 'z')]
+    pub z_field: Option<String>,
+    /// Category field for blob plot
+    #[arg(long = "category", short = 'c')]
+    /// Category field for blob plot
+    #[arg(long = "category", short = 'c')]
+    pub cat_field: Option<String>,
+    /// Resolution for blob plot
+    #[arg(long, default_value_t = 30)]
+    pub resolution: usize,
+    /// Maximum number of categories for blob/cumulative plot
+    #[arg(long = "cat-count", default_value_t = 10)]
+    pub cat_count: usize,
+    /// Category order for blob/cumulative plot (<cat1>,<cat2>,...)
+    #[arg(long = "cat-order")]
+    pub cat_order: Option<String>,
+    /// Colour palette for categories
+    #[arg(long, value_enum)]
+    pub palette: Option<Palette>,
+    /// Individual colours to modify palette (<index>=<hexcode>)
+    #[arg(long)]
+    pub color: Option<Vec<String>>,
+}
+
+/// Options to pass to `blobtk taxonomy`
+#[derive(Parser, Debug)]
+#[pyclass]
+pub struct TaxonomyOptions {
+    /// Path to NCBI taxdump directory
+    #[arg(long, short = 't')]
+    pub taxdump: Option<PathBuf>,
+    /// Root taxon to build taxonomy for
+    #[arg(long = "root-id", short = 'r')]
+    pub root_id: Option<String>,
 }
 
 /// Command line argument parser
