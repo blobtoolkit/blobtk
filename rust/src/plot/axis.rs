@@ -96,6 +96,7 @@ pub struct ScatterAxis {
 #[derive(Clone, Debug)]
 pub struct AxisOptions {
     pub label: String,
+    pub label_offset: f64,
     pub position: Position,
     pub padding: [f64; 2],
     pub offset: f64,
@@ -117,6 +118,7 @@ impl Default for AxisOptions {
     fn default() -> AxisOptions {
         AxisOptions {
             label: "".to_string(),
+            label_offset: 70.0,
             position: Position::LEFT,
             padding: [0.0, 0.0],
             offset: 0.0,

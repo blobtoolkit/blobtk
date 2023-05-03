@@ -280,6 +280,7 @@ pub fn plot(
     let x_hist = Chart {
         axes: ChartAxes {
             x: Some(AxisOptions {
+                label: "".to_string(),
                 offset: blob_dimensions.hist_height,
                 tick_labels: false,
                 ..x_opts.clone()
@@ -287,6 +288,8 @@ pub fn plot(
             y: Some(AxisOptions {
                 position: Position::LEFT,
                 label: "sum length".to_string(),
+                label_offset: 80.0,
+                font_size: 25.0,
                 scale: Scale::LINEAR,
                 domain: [0.0, x_max],
                 range: [blob_dimensions.hist_height, 0.0],
@@ -334,6 +337,7 @@ pub fn plot(
         axes: ChartAxes {
             x: Some(AxisOptions {
                 offset: 0.0,
+                label: "".to_string(),
                 tick_labels: false,
                 ..y_opts.clone()
             }),
@@ -343,6 +347,8 @@ pub fn plot(
                     + blob_dimensions.padding[0]
                     + blob_dimensions.padding[2],
                 label: "sum length".to_string(),
+                label_offset: 80.0,
+                font_size: 25.0,
                 scale: Scale::LINEAR,
                 domain: [0.0, y_max],
                 range: [0.0, blob_dimensions.hist_width],
@@ -350,12 +356,12 @@ pub fn plot(
                 rotate: true,
                 ..Default::default()
             }),
-
             x2: Some(AxisOptions {
                 offset: blob_dimensions.hist_width,
                 position: Position::RIGHT,
                 major_ticks: None,
                 minor_ticks: None,
+                label: "".to_string(),
                 ..y_opts.clone()
             }),
             y2: Some(AxisOptions {
@@ -366,6 +372,7 @@ pub fn plot(
                 range: [0.0, blob_dimensions.hist_width],
                 major_ticks: None,
                 minor_ticks: None,
+                label: "".to_string(),
                 ..Default::default()
             }),
 

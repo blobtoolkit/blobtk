@@ -975,7 +975,7 @@ pub fn chart_axis(plot_axis: &AxisOptions) -> Group {
             plot_axis.range[1] + plot_axis.padding[0] + plot_axis.padding[1],
             plot_axis.offset,
             (plot_axis.range[1] + plot_axis.range[0]) / 2.0 + plot_axis.padding[0],
-            plot_axis.offset - 20.0,
+            plot_axis.offset - plot_axis.label_offset,
             0.0,
         ),
         Position::RIGHT => (
@@ -983,7 +983,7 @@ pub fn chart_axis(plot_axis: &AxisOptions) -> Group {
             plot_axis.range[1],
             plot_axis.offset,
             plot_axis.range[0] + plot_axis.padding[0] + plot_axis.padding[1],
-            plot_axis.offset + 20.0,
+            plot_axis.offset + plot_axis.label_offset,
             (plot_axis.range[1] + plot_axis.range[0]) / 2.0 + plot_axis.padding[0],
             90.0,
         ),
@@ -993,7 +993,7 @@ pub fn chart_axis(plot_axis: &AxisOptions) -> Group {
             plot_axis.range[1] + plot_axis.padding[0] + plot_axis.padding[1],
             plot_axis.offset,
             (plot_axis.range[1] + plot_axis.range[0]) / 2.0 + plot_axis.padding[0],
-            plot_axis.offset - 20.0,
+            plot_axis.offset + plot_axis.label_offset,
             0.0,
         ),
         Position::LEFT => (
@@ -1001,7 +1001,7 @@ pub fn chart_axis(plot_axis: &AxisOptions) -> Group {
             plot_axis.range[1],
             plot_axis.offset,
             plot_axis.range[0] + plot_axis.padding[0] + plot_axis.padding[1],
-            plot_axis.offset + 20.0,
+            plot_axis.offset - plot_axis.label_offset,
             (plot_axis.range[1] + plot_axis.range[0]) / 2.0 + plot_axis.padding[0],
             90.0,
         ),
@@ -1019,11 +1019,11 @@ pub fn chart_axis(plot_axis: &AxisOptions) -> Group {
 
     let label = Text::new()
         .set("font-family", "Roboto, Open sans, sans-serif")
-        .set("font-size", "20")
+        .set("font-size", plot_axis.font_size)
         .set("text-anchor", "middle")
-        .set("dominant-baseline", "central")
+        .set("dominant-baseline", "middle")
         .set("stroke", "none")
-        .set("fill", "black")
+        .set("fill", plot_axis.color.clone())
         .set(
             "transform",
             format!(
