@@ -1,7 +1,7 @@
 use svg::node::element::{Circle, Group};
 
 use super::{
-    axis::{ChartAxes, Position},
+    axis::ChartAxes,
     component::chart_axis,
     data::{HistogramData, ScatterData},
     style::{path_filled, path_open},
@@ -60,6 +60,7 @@ impl Default for Chart {
 
 impl Chart {
     pub fn svg(self) -> Group {
+        let opacity = 1.0;
         let mut group = Group::new();
         if self.scatter_data.is_some() {
             let scatter_data = self.scatter_data.unwrap();
@@ -72,7 +73,7 @@ impl Chart {
                         .set("r", point.z)
                         .set("fill", point.color.clone().unwrap())
                         .set("stroke", "#999999")
-                        .set("opacity", 1),
+                        .set("opacity", opacity),
                 );
             }
             group = group.add(scatter_group.set(
@@ -85,14 +86,19 @@ impl Chart {
         }
         if self.histogram_data.is_some() {
             let mut hist_group = Group::new();
+            let mut hist_paths = vec![];
             for hist in self.histogram_data.unwrap() {
                 let color;
                 color = hist.category.clone().unwrap().color;
-                hist_group = hist_group.add(path_filled(
-                    hist.clone()
-                        .to_path_data(self.axes.x.clone().unwrap().position, true),
-                    Some(&color),
-                ));
+                let path_data = hist
+                    .clone()
+                    .to_path_data(self.axes.x.clone().unwrap().position, true);
+                hist_group = hist_group
+                    .add(path_filled(path_data.clone(), Some(&color)).set("opacity", opacity));
+                hist_paths.push((path_data, color));
+            }
+            for (path, color) in hist_paths {
+                hist_group = hist_group.add(path_open(path, Some(&color), Some(3.0)));
             }
             group = group.add(hist_group.set(
                 "transform",

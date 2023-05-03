@@ -7,7 +7,6 @@ pub struct TickOptions {
     pub label_ticks: bool,
     pub weight: f64,
     pub length: f64,
-    pub rotate: f64,
     pub status: TickStatus,
 }
 
@@ -19,7 +18,6 @@ impl Default for TickOptions {
             label_ticks: false,
             weight: 2.0,
             length: 10.0,
-            rotate: 0.0,
             status: TickStatus::Major,
         }
     }
@@ -108,6 +106,8 @@ pub struct AxisOptions {
     pub domain: [f64; 2],
     pub range: [f64; 2],
     pub clamp: Option<f64>,
+    pub rotate: bool,
+    pub tick_labels: bool,
     pub major_ticks: Option<TickOptions>,
     pub minor_ticks: Option<TickOptions>,
 }
@@ -126,6 +126,8 @@ impl Default for AxisOptions {
             domain: [0.0, 1.0],
             range: [0.0, 100.0],
             clamp: None,
+            rotate: false,
+            tick_labels: true,
             major_ticks: Some(TickOptions {
                 ..Default::default()
             }),

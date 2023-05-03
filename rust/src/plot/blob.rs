@@ -14,7 +14,7 @@ use plot::category::Category;
 
 use super::axis::{AxisName, AxisOptions, ChartAxes, Position, Scale};
 use super::chart::{Chart, Dimensions};
-use super::component::{chart_axis, hist_paths};
+use super::component::{chart_axis, legend, LegendShape};
 use super::data::{self, Bin, HistogramData, ScatterData, ScatterPoint};
 use super::style::{path_filled, path_open};
 
@@ -226,6 +226,15 @@ pub fn blob_points(
     }
 }
 
+pub fn category_legend_full(categories: Vec<Category>) -> Group {
+    let mut entries = vec![];
+    for cat in categories {
+        entries.push((format!("{}", cat.label), cat.color, LegendShape::Rect));
+    }
+    let title = "".to_string();
+    legend(title, entries, None, 1)
+}
+
 pub fn plot(
     blob_dimensions: BlobDimensions,
     scatter_data: ScatterData,
@@ -257,7 +266,7 @@ pub fn plot(
             y: Some(y_opts.clone()),
             ..Default::default()
         },
-        scatter_data: Some(scatter_data),
+        scatter_data: Some(scatter_data.clone()),
         dimensions: Dimensions {
             height: blob_dimensions.height,
             width: blob_dimensions.width,
@@ -271,6 +280,7 @@ pub fn plot(
         axes: ChartAxes {
             x: Some(AxisOptions {
                 offset: blob_dimensions.hist_height,
+                tick_labels: false,
                 ..x_opts.clone()
             }),
             y: Some(AxisOptions {
@@ -278,6 +288,7 @@ pub fn plot(
                 label: "sum length".to_string(),
                 scale: Scale::LINEAR,
                 domain: [0.0, x_max],
+                rotate: true,
                 range: [blob_dimensions.hist_height, 0.0],
                 ..Default::default()
             }),
@@ -321,6 +332,7 @@ pub fn plot(
         axes: ChartAxes {
             x: Some(AxisOptions {
                 offset: 0.0,
+                tick_labels: false,
                 ..y_opts.clone()
             }),
             y: Some(AxisOptions {
@@ -404,6 +416,18 @@ pub fn plot(
                     + blob_dimensions.padding[3],
                 blob_dimensions.hist_height + blob_dimensions.margin[0]
             ),
+        ))
+        .add(category_legend_full(scatter_data.categories).set(
+            "transform",
+            format!(
+                "translate({}, {})",
+                blob_dimensions.margin[3]
+                    + blob_dimensions.width
+                    + blob_dimensions.padding[1]
+                    + blob_dimensions.padding[3]
+                    + 10.0,
+                10.0
+            ),
         ));
 
     document
@@ -468,17 +492,8 @@ pub fn svg(
         ));
     }
 
-    // let x_hist = hist_paths(
-    //     hist_data_x,
-    //     [0.0, dimensions.width],
-    //     [0.0, dimensions.hist_height],
-    // );
     let x_axis = chart_axis(&scatter_data.x);
     let y_axis = chart_axis(&scatter_data.y);
-    // let y_axis_options = AxisOptions {
-    //     ..Default::default()
-    // };
-    // let y_axis = create_axis(&scatter_data.y, y_axis_options);
 
     let blob_group = Group::new()
         .set(

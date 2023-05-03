@@ -46,25 +46,51 @@ pub fn legend(
     subtitle: Option<String>,
     columns: u8,
 ) -> Group {
-    let title_text = Text::new()
-        .set("font-family", "Roboto, Open sans, sans-serif")
-        .set("font-size", "24")
-        .set("text-anchor", "start")
-        .set("dominant-baseline", "bottom")
-        .set("stroke", "none")
-        .set("fill", "black")
-        .add(nodeText::new(title));
+    let title_text = if title.is_empty() {
+        Text::new()
+    } else {
+        Text::new()
+            .set("font-family", "Roboto, Open sans, sans-serif")
+            .set("font-size", "24")
+            .set("text-anchor", "start")
+            .set("dominant-baseline", "bottom")
+            .set("stroke", "none")
+            .set("fill", "black")
+            .add(nodeText::new(title.clone()))
+    };
     let mut group = Group::new().add(title_text);
     let cell = 18;
     let gap = 8;
     let mut offset_y = 0;
-    let mut offset_x = -175;
+    let mut offset_x: i32 = -175;
     let per_column = entries.len() / columns as usize;
     for (i, entry) in entries.iter().enumerate() {
         if i % per_column == 0 {
             offset_x += 175;
-            offset_y = gap / 2;
+            offset_y = if title.is_empty() { 0 } else { gap / 2 };
         }
+        let entry_text = Text::new()
+            .set("font-family", "Roboto, Open sans, sans-serif")
+            .set("font-size", cell)
+            .set("text-anchor", "start")
+            .set("dominant-baseline", "bottom")
+            .set("stroke", "none")
+            .set("fill", "black")
+            .set("x", cell + gap)
+            .set("y", cell + gap / 2)
+            .add(nodeText::new(&entry.clone().0));
+        let background = Group::new().add(
+            Rectangle::new()
+                .set("stroke", "none")
+                .set("fill", "#ffffff")
+                .set("x", -gap / 2)
+                .set("y", gap / 2)
+                .set("height", cell + gap / 2)
+                .set(
+                    "width",
+                    cell as f64 + gap as f64 + entry.0.len() as f64 * cell as f64 * 0.7,
+                ),
+        );
         let shape = match entry.2 {
             LegendShape::Rect => Group::new().add(
                 Rectangle::new()
@@ -117,21 +143,12 @@ pub fn legend(
                         .set("y2", 6),
                 ),
         };
-        let entry_text = Text::new()
-            .set("font-family", "Roboto, Open sans, sans-serif")
-            .set("font-size", cell)
-            .set("text-anchor", "start")
-            .set("dominant-baseline", "bottom")
-            .set("stroke", "none")
-            .set("fill", "black")
-            .set("x", cell + gap)
-            .set("y", cell + gap / 2)
-            .add(nodeText::new(&entry.clone().0));
         let entry_group = Group::new()
             .set(
                 "transform",
                 format!("translate({}, {})", offset_x, offset_y),
             )
+            .add(background)
             .add(shape)
             .add(entry_text);
         group = group.add(entry_group);
@@ -249,6 +266,7 @@ pub fn create_tick(
         &axis_options.scale,
         None,
     );
+    let rotate = axis_options.rotate;
     let (x1, y1, x2, y2, x_text, y_text, anchor, baseline, angle) = match axis_options.position {
         Position::TOP => (
             location,
@@ -257,9 +275,9 @@ pub fn create_tick(
             axis_options.offset - tick_options.length,
             location,
             axis_options.offset - tick_options.length * 1.5,
-            "middle",
-            "auto",
-            0.0,
+            if rotate { "end" } else { "middle" },
+            if rotate { "central" } else { "auto" },
+            if rotate { 90.0 } else { 0.0 },
         ),
         Position::RIGHT => (
             axis_options.offset,
@@ -279,9 +297,9 @@ pub fn create_tick(
             axis_options.offset + tick_options.length,
             location,
             axis_options.offset + tick_options.length * 1.5,
-            "middle",
-            "hanging",
-            0.0,
+            if rotate { "start" } else { "middle" },
+            if rotate { "central" } else { "hanging" },
+            if rotate { 90.0 } else { 0.0 },
         ),
         Position::LEFT => (
             axis_options.offset,
@@ -290,9 +308,9 @@ pub fn create_tick(
             location,
             axis_options.offset - tick_options.length * 1.5,
             location,
-            "middle",
-            "hanging",
-            90.0,
+            if rotate { "end" } else { "middle" },
+            if rotate { "central" } else { "hanging" },
+            if rotate { 0.0 } else { 90.0 },
         ),
     };
     let path_data = Data::new().move_to((x1, y1)).line_to((x2, y2));
@@ -300,20 +318,24 @@ pub fn create_tick(
         TickStatus::Major => path_axis_major(path_data, Some(&axis_options.color)),
         TickStatus::Minor => path_axis_minor(path_data, Some(&axis_options.color)),
     };
-    let text = match tick_options.status {
-        TickStatus::Major => Text::new()
-            .set("font-family", "Roboto, Open sans, sans-serif")
-            .set("font-size", tick_options.font_size)
-            .set("text-anchor", anchor)
-            .set("dominant-baseline", baseline)
-            .set("stroke", "none")
-            .set("fill", axis_options.color.clone())
-            .set(
-                "transform",
-                format!("translate({:?}, {:?}) rotate({:?})", x_text, y_text, angle),
-            )
-            .add(nodeText::new(label)),
-        TickStatus::Minor => Text::new(),
+    let text = if axis_options.tick_labels {
+        match tick_options.status {
+            TickStatus::Major => Text::new()
+                .set("font-family", "Roboto, Open sans, sans-serif")
+                .set("font-size", tick_options.font_size)
+                .set("text-anchor", anchor)
+                .set("dominant-baseline", baseline)
+                .set("stroke", "none")
+                .set("fill", axis_options.color.clone())
+                .set(
+                    "transform",
+                    format!("translate({:?}, {:?}) rotate({:?})", x_text, y_text, angle),
+                )
+                .add(nodeText::new(label)),
+            TickStatus::Minor => Text::new(),
+        }
+    } else {
+        Text::new()
     };
 
     Tick {
@@ -989,14 +1011,4 @@ pub fn chart_axis(plot_axis: &AxisOptions) -> Group {
         .add(minor_tick_group)
         .add(major_tick_group)
         .add(axis)
-}
-
-pub fn hist_paths(hist_data: &Vec<HistogramData>, x_range: [f64; 2], y_range: [f64; 2]) {
-    let x_domain = [0.0, hist_data[0].bins.len() as f64];
-    for hist in hist_data.iter() {
-        let mut path = Data::new().move_to((x_range[0], y_range[0]));
-        for (i, bin) in hist.bins.iter().enumerate() {
-            // TODO: set y domain and scale histogram
-        }
-    }
 }
