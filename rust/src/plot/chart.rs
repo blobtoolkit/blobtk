@@ -60,7 +60,7 @@ impl Default for Chart {
 
 impl Chart {
     pub fn svg(self) -> Group {
-        let opacity = 1.0;
+        let opacity = 0.6;
         let mut group = Group::new();
         if self.scatter_data.is_some() {
             let scatter_data = self.scatter_data.unwrap();
@@ -73,7 +73,7 @@ impl Chart {
                         .set("r", point.z)
                         .set("fill", point.color.clone().unwrap())
                         .set("stroke", "#999999")
-                        .set("opacity", opacity),
+                        .set("fill-opacity", opacity),
                 );
             }
             group = group.add(scatter_group.set(
@@ -98,7 +98,7 @@ impl Chart {
                 hist_paths.push((path_data, color));
             }
             for (path, color) in hist_paths {
-                hist_group = hist_group.add(path_open(path, Some(&color), Some(3.0)));
+                hist_group = hist_group.add(path_open(path, Some(&color), Some(2.0)));
             }
             group = group.add(hist_group.set(
                 "transform",
