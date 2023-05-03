@@ -3,6 +3,8 @@
 //! `blobtk plot <args>`
 
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 use crate::blobdir;
 use crate::cli;
@@ -45,7 +47,7 @@ pub fn save_svg(document: &Document, options: &PlotOptions) {
     svg::save(options.output.as_str(), document).unwrap();
 }
 
-pub fn save_png(document: &Document, _: &PlotOptions) {
+pub fn save_png(document: &Document, options: &PlotOptions) {
     let mut fontdb = fontdb::Database::new();
     fontdb.load_system_fonts();
     let mut buf = Vec::new();
@@ -64,7 +66,23 @@ pub fn save_png(document: &Document, _: &PlotOptions) {
         pixmap.as_mut(),
     )
     .unwrap();
-    pixmap.save_png("test.png").unwrap();
+    pixmap.save_png(options.output.as_str()).unwrap();
+}
+
+pub enum Suffix {
+    PNG,
+    SVG,
+}
+
+impl FromStr for Suffix {
+    type Err = ();
+    fn from_str(input: &str) -> Result<Suffix, Self::Err> {
+        match input {
+            "png" => Ok(Suffix::PNG),
+            "svg" => Ok(Suffix::SVG),
+            _ => Err(()),
+        }
+    }
 }
 
 pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
@@ -105,13 +123,22 @@ pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
         &options,
     );
     let document: Document = snail::svg(&snail_stats, &options);
+    save_by_suffix(options, document);
+}
 
-    save_svg(&document, &options);
-
-    save_png(&document, &options);
-
-    // let cats = blobdir::parse_field_cat("buscogenes_family".to_string(), &options);
-    // let identifiers = blobdir::parse_field_string("identifiers".to_string(), &options);
+fn save_by_suffix(options: &PlotOptions, document: Document) {
+    let suffix = Suffix::from_str(
+        PathBuf::from(options.output.as_str())
+            .extension()
+            .unwrap()
+            .to_str()
+            .unwrap(),
+    )
+    .unwrap();
+    match suffix {
+        Suffix::PNG => save_png(&document, &options),
+        Suffix::SVG => save_svg(&document, &options),
+    }
 }
 
 /// Convert a colorous::Color to 6 digit hex string
@@ -257,10 +284,7 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
         y_max,
         &options,
     );
-
-    save_svg(&document, &options);
-
-    save_png(&document, &options);
+    save_by_suffix(options, document);
 }
 
 /// Execute the `plot` subcommand from `blobtk`.
