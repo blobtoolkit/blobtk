@@ -12,7 +12,7 @@ use crate::io;
 
 pub use cli::TaxonomyOptions;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Name {
     pub tax_id: String,
     pub name: String,
@@ -54,7 +54,7 @@ impl<'de> Deserialize<'de> for Name {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Node {
     pub tax_id: String,
     pub parent_id: String,
@@ -131,7 +131,14 @@ pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), Box<dyn std::error
                 );
                 match node {
                     Ok(n) => {
-                        nodes.insert(n.tax_id.clone(), n);
+                        nodes.insert(n.tax_id.clone(), n.clone());
+                        println!(
+                            "{}, {}, {}",
+                            n.names[0].class.as_ref().unwrap(),
+                            n.names[0].name,
+                            n.names[0].tax_id
+                        );
+                        println!("{}, {}, {:?}", n.parent_id, n.rank, n.scientific_name);
                         ()
                     }
                     Err(err) => eprintln!("{}", err),
@@ -144,99 +151,15 @@ pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), Box<dyn std::error
     if let Ok(lines) = io::read_lines(names_file) {
         for line in lines {
             if let Ok(s) = line {
-                let name = serde_json::from_str::<Name>(
+                let _name = serde_json::from_str::<Name>(
                     format!("\"{}\"", s.trim_end_matches("\t|"))
                         .replace("\t|\t", " , ")
                         .replace("\t\t", " , ")
                         .as_str(),
                 );
-                // match name {
-                //     Ok(n) => {
-                //         match nodes.get(&n.tax_id) {
-                //             Some(node) => {
-                //                 // if n.class == Some(String::from("scientific name")) {
-                //                 //     node.scientific_name = Some(n.name);
-                //                 // }
-                //                 node.names.push(n);
-                //             }
-                //             None => (),
-                //         }
-                //         names.push(n)
-                //     }
-                //     Err(err) => eprintln!("{}", err),
-                // }
             }
         }
     }
     println!("processed {} names", nodes.len());
     Ok(())
 }
-
-// mod string {
-//     use std::fmt::Display;
-//     use std::str::FromStr;
-
-//     use serde::{de, Deserialize, Deserializer, Serializer};
-
-//     pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         T: Display,
-//         S: Serializer,
-//     {
-//         serializer.collect_str(value)
-//     }
-
-//     pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
-//     where
-//         T: FromStr,
-//         T::Err: Display,
-//         D: Deserializer<'de>,
-//     {
-//         String::deserialize(deserializer)?
-//             .parse()
-//             .map_err(de::Error::custom)
-//     }
-// }
-
-// #[derive(Debug, Serialize)]
-// struct Node {
-//     #[serde(deserialize_with = "string")]
-//     pub tax_id: String,
-//     #[serde(deserialize_with = "string")]
-//     pub parent_id: String,
-//     #[serde(deserialize_with = "string")]
-//     pub rank: String,
-// }
-
-// impl<'de> Deserialize<'de> for Node {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: Deserializer<'de>,
-//     {
-//         println!("{:?}", "here");
-//         let s: &str = Deserialize::deserialize(deserializer)?;
-
-//         println!("{:?}", "there");
-
-//         let mut parts = s.trim().splitn(2, ",").fuse();
-//         println!("{:?}", parts);
-//         let tax_id: String = parts
-//             .next()
-//             .ok_or_else(|| D::Error::custom("missing taxId"))?
-//             .into();
-//         let parent_id: String = parts
-//             .next()
-//             .ok_or_else(|| D::Error::custom("missing parent taxId"))?
-//             .into();
-//         let rank: String = parts
-//             .next()
-//             .ok_or_else(|| D::Error::custom("missing rank"))?
-//             .into();
-
-//         Ok(Node {
-//             tax_id,
-//             parent_id,
-//             rank,
-//         })
-//     }
-// }

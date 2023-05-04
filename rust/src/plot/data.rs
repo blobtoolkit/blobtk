@@ -66,7 +66,7 @@ impl Default for HistogramData {
 }
 
 impl HistogramData {
-    pub fn to_path_data(self, position: Position, filled: bool) -> Data {
+    pub fn to_path_data(self, position: Position, _filled: bool) -> Data {
         let shift = self.max_bin;
         let (mut offset, mut path_data) = match position {
             Position::TOP | Position::BOTTOM => (0.0, Data::new().move_to((0.0, shift))),

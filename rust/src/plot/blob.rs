@@ -1,13 +1,12 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::default;
+
 use std::str::FromStr;
 
 use svg::node::element::{Circle, Group, Rectangle};
 use svg::Document;
 
-use crate::blobdir::FieldMeta;
-use crate::utils::{max_float, scale_float, scale_floats};
+use crate::utils::{max_float, scale_floats};
 use crate::{blobdir, cli, plot};
 
 use plot::category::Category;
@@ -15,7 +14,7 @@ use plot::category::Category;
 use super::axis::{AxisName, AxisOptions, ChartAxes, Position, Scale};
 use super::chart::{Chart, Dimensions};
 use super::component::{chart_axis, legend, LegendShape};
-use super::data::{self, Bin, HistogramData, ScatterData, ScatterPoint};
+use super::data::{Bin, HistogramData, ScatterData, ScatterPoint};
 use super::style::{path_filled, path_open};
 
 #[derive(Clone, Debug)]
@@ -131,7 +130,7 @@ pub fn blob_points(
     axes: HashMap<String, String>,
     blob_data: &BlobData,
     meta: &blobdir::Meta,
-    options: &cli::PlotOptions,
+    _options: &cli::PlotOptions,
 ) -> ScatterData {
     let dimensions = BlobDimensions {
         ..Default::default()
@@ -243,7 +242,7 @@ pub fn plot(
     hist_data_y: Vec<HistogramData>,
     x_max: f64,
     y_max: f64,
-    options: &cli::PlotOptions,
+    _options: &cli::PlotOptions,
 ) -> Document {
     let height = blob_dimensions.height
         + blob_dimensions.hist_height
@@ -449,7 +448,7 @@ pub fn svg(
     scatter_data: &ScatterData,
     hist_data_x: &Vec<HistogramData>,
     hist_data_y: &Vec<HistogramData>,
-    options: &cli::PlotOptions,
+    _options: &cli::PlotOptions,
 ) -> Document {
     let mut scatter_group = Group::new().set(
         "transform",

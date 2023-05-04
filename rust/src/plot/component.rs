@@ -9,9 +9,7 @@ use svg::node::Text as nodeText;
 
 use crate::utils::{format_si, linear_scale, linear_scale_float, scale_float, scale_floats};
 
-use super::axis::{self, AxisOptions, Position, Scale, ScatterAxis, TickOptions, TickStatus};
-use super::blob::BlobDimensions;
-use super::data::{self, HistogramData};
+use super::axis::{AxisOptions, Position, Scale, TickOptions, TickStatus};
 
 #[derive(Clone, Debug)]
 pub struct RadialTick {

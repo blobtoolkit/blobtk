@@ -1,8 +1,6 @@
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 
-use rust_htslib::bam::index;
-
 #[derive(Clone, Debug)]
 pub struct Category {
     pub label: String,
