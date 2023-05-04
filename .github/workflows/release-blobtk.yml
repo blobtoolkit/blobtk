@@ -210,9 +210,18 @@ jobs:
   create-conda-release-macos:
     name: Create conda release Mac
     runs-on: macos-latest
-    if: "startsWith(github.ref, 'refs/tags/')"
-    needs: create-github-release
+    #if: "startsWith(github.ref, 'refs/tags/')"
+    needs: [fetch-wheels, create-conda-release-linux]
     steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/download-artifact@v3
+        with:
+          name: binaries
+          path: ./dist
       - uses: actions/download-artifact@v3
         with:
           name: wheels
@@ -221,28 +230,59 @@ jobs:
         run: |
           mkdir -p ./conda/dist
           cp ./dist/*macos*.whl ./conda/dist/
+          cp ./dist/blobtk-macos ./conda/dist/blobtk
       - name: conda build
         run: |
           conda install -y conda-build
-          ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
-          conda build ./conda
+          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
+          mkdir -p ./dist/osx-64
+          conda build --no-anaconda-upload ./conda --output-folder ./dist
+          ls ./dist/*
+      - name: conda upload
+        shell: bash -l {0}
+        run: |
+          conda install -y anaconda-client
+          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
+          anaconda upload --force --label main ./dist/osx-64/*.tar.bz2
 
   create-conda-release-linux:
     name: Create conda release Linux
     runs-on: ubuntu-latest
-    if: "startsWith(github.ref, 'refs/tags/')"
-    needs: create-github-release
+    #container: quay.io/pypa/manylinux2014_x86_64
+    #if: "startsWith(github.ref, 'refs/tags/')"
+    needs: rebuild-rust
     steps:
+      - uses: actions/checkout@v3
+      - uses: actions/download-artifact@v3
+        with:
+          name: binaries
+          path: ./dist
       - uses: actions/download-artifact@v3
         with:
           name: wheels
           path: ./dist
+      # - name: Install libssl-dev
+      #   run: sudo apt-get install -y libssl-dev pkg-config
       - name: copy files
         run: |
           mkdir -p ./conda/dist
           cp ./dist/*linux*.whl ./conda/dist/
+          cp ./dist/blobtk-linux ./conda/dist/blobtk
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniconda-version: latest
+          auto-activate-base: true
+          activate-environment: ""
       - name: conda build
         run: |
           conda install -y conda-build
-          ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
-          conda build ./conda
+          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
+          mkdir -p ./dist/linux-64
+          conda build --no-anaconda-upload ./conda --output-folder ./dist
+          ls ./dist/*
+      - name: conda upload
+        shell: bash -l {0}
+        run: |
+          conda install -y anaconda-client
+          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
+          anaconda upload --force --label main ./dist/linux-64/*.tar.bz2
