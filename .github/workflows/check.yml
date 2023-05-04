@@ -1,7 +1,7 @@
 name: cargo-check
 
 on:
-  push:
+  workflow_dispatch:
 
 jobs:
   check:
