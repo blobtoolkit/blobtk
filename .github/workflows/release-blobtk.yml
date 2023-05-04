@@ -1,4 +1,4 @@
-name: release-core
+name: release-blobtk
 
 on:
   push:
@@ -223,6 +223,7 @@ jobs:
           cp ./dist/*macos*.whl ./conda/dist/
       - name: conda build
         run: |
+          conda install -y conda-build
           ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
           conda build ./conda
 
@@ -242,5 +243,6 @@ jobs:
           cp ./dist/*linux*.whl ./conda/dist/
       - name: conda build
         run: |
+          conda install -y conda-build
           ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
           conda build ./conda
