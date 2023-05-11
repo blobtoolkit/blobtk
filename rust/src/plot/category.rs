@@ -11,6 +11,7 @@ pub struct Category {
 
 pub fn set_cat_order(
     values: &Vec<(String, usize)>,
+    z_values: &Vec<f64>,
     order: &Option<String>,
     count: &usize,
     palette: &Vec<String>,
@@ -28,17 +29,27 @@ pub fn set_cat_order(
     }
     let frequencies = values
         .iter()
-        .map(|x| x.clone().0)
-        .fold(HashMap::new(), |mut map, val| {
-            map.entry(val).and_modify(|frq| *frq += 1).or_insert(1);
+        .enumerate()
+        .map(|(i, x)| (x.clone().0, i))
+        .fold(HashMap::new(), |mut map, (val, i)| {
+            map.entry(val)
+                .and_modify(|(frq, span)| {
+                    *frq += 1;
+                    *span += z_values[i]
+                })
+                .or_insert((1, z_values[i]));
             map
         });
     let mut sorted_cats: Vec<_> = frequencies.clone().into_iter().collect();
     sorted_cats.sort_by(|x, y| {
-        if x.1 == y.1 {
-            x.0.partial_cmp(&y.0).unwrap()
+        if (x.1).0 == (y.1).0 {
+            if (x.1).1 == (y.1).1 {
+                x.0.partial_cmp(&y.0).unwrap()
+            } else {
+                (y.1).1.partial_cmp(&(x.1).1).unwrap()
+            }
         } else {
-            y.1.cmp(&x.1)
+            (y.1).0.cmp(&(x.1).0)
         }
     });
 
@@ -48,10 +59,11 @@ pub fn set_cat_order(
         // TODO: prevent duplication when adding remaining cats
         for entry in order.clone().unwrap().split(",") {
             if frequencies.contains_key(entry) {
+                let label = entry.to_string();
                 cat_order.push(Category {
                     label: entry.to_string(),
-                    members: vec![],
-                    indices: vec![],
+                    members: vec![label.clone()],
+                    indices: indices[&label].clone(),
                     color: palette[index].clone(),
                 });
                 index += 1;
@@ -59,6 +71,9 @@ pub fn set_cat_order(
         }
     }
     for (label, _) in &sorted_cats {
+        if cat_order.iter().any(|cat| cat.label == label.clone()) {
+            continue;
+        }
         if index < count - 1 || index == count - 1 && *count == sorted_cats.len() {
             cat_order.push(Category {
                 label: label.clone(),

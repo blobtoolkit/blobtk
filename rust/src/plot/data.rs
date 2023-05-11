@@ -29,11 +29,38 @@ impl Default for ScatterPoint {
 }
 
 #[derive(Clone, Debug)]
+pub struct Line {
+    pub coords: Vec<[f64; 2]>,
+    pub label: Option<String>,
+    pub color: Option<String>,
+    pub cat_index: usize,
+}
+
+impl Default for Line {
+    fn default() -> Line {
+        Line {
+            coords: vec![],
+            label: None,
+            color: None,
+            cat_index: 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ScatterData {
     pub points: Vec<ScatterPoint>,
     pub x: AxisOptions,
     pub y: AxisOptions,
     pub z: AxisOptions,
+    pub categories: Vec<Category>,
+}
+
+#[derive(Clone, Debug)]
+pub struct LineData {
+    pub lines: Vec<Line>,
+    pub x: AxisOptions,
+    pub y: AxisOptions,
     pub categories: Vec<Category>,
 }
 

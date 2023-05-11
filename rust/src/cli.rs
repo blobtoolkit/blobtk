@@ -166,6 +166,13 @@ pub enum View {
 }
 
 #[derive(ValueEnum, Clone, Debug)]
+pub enum Origin {
+    O,
+    X,
+    Y,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
 pub enum Palette {
     Default,
     Inverse,
@@ -220,6 +227,9 @@ pub struct PlotOptions {
     /// Category order for blob/cumulative plot (<cat1>,<cat2>,...)
     #[arg(long = "cat-order")]
     pub cat_order: Option<String>,
+    /// Origin for category lines
+    #[arg(long, value_enum)]
+    pub origin: Option<Origin>,
     /// Colour palette for categories
     #[arg(long, value_enum)]
     pub palette: Option<Palette>,

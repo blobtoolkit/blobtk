@@ -9,6 +9,7 @@ use std::str::FromStr;
 use crate::blobdir;
 use crate::cli;
 use crate::plot::blob::BlobData;
+use crate::plot::cumulative::CumulativeData;
 // use crate::io;
 
 pub use cli::PlotOptions;
@@ -33,6 +34,9 @@ pub mod chart;
 
 /// Chart components.
 pub mod component;
+
+/// Cumulative plot functions.
+pub mod cumulative;
 
 /// Scatter plot functions.
 pub mod data;
@@ -236,6 +240,7 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
 
     let (cat_order, cat_indices) = category::set_cat_order(
         &cat_values,
+        &plot_values["z"],
         &options.cat_order,
         &options.cat_count,
         &palette,
@@ -287,12 +292,62 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     save_by_suffix(options, document);
 }
 
+pub fn plot_cumulative(meta: &blobdir::Meta, options: &cli::PlotOptions) {
+    let mut plot_meta: HashMap<String, String> = HashMap::new();
+    plot_meta.insert("z".to_string(), "length".to_string());
+    if options.cat_field.is_some() {
+        plot_meta.insert("cat".to_string(), options.cat_field.clone().unwrap());
+    } else {
+        plot_meta.insert("cat".to_string(), meta.plot.cat.clone().unwrap());
+    }
+    let (plot_values, cat_values) = blobdir::get_plot_values(&meta, &options.blobdir, &plot_meta);
+
+    let palette = set_palette(&options.palette, &options.color, options.cat_count);
+
+    let (cat_order, cat_indices) = category::set_cat_order(
+        &cat_values,
+        &plot_values["z"],
+        &options.cat_order,
+        &options.cat_count,
+        &palette,
+    );
+    // let id = meta.id.clone();
+    // let record_type = meta.record_type.clone();
+
+    let filters = blobdir::parse_filters(&options.filter);
+    let wanted_indices = blobdir::set_filters(filters, &meta, &options.blobdir);
+
+    let cumulative_data = CumulativeData {
+        z: blobdir::apply_filter_float(&plot_values["z"], &wanted_indices),
+        cat: blobdir::apply_filter_int(&cat_indices, &wanted_indices),
+        cat_order,
+    };
+
+    // let cumulative_data = cumulative::cumulative_lines(plot_meta, &cumulative_data, &meta, &options);
+
+    // let dimensions = BlobDimensions {
+    //     ..Default::default()
+    // };
+
+    // let document: Document = blob::plot(
+    //     dimensions,
+    //     scatter_data,
+    //     x_bins,
+    //     y_bins,
+    //     x_max,
+    //     y_max,
+    //     &options,
+    // );
+    // save_by_suffix(options, document);
+}
+
 /// Execute the `plot` subcommand from `blobtk`.
 pub fn plot(options: &cli::PlotOptions) -> Result<(), Box<dyn std::error::Error>> {
     let meta = blobdir::parse_blobdir(&options.blobdir);
     let view = &options.view;
     match view {
         Some(cli::View::Blob) => plot_blob(&meta, &options),
+        Some(cli::View::Cumulative) => plot_cumulative(&meta, &options),
         Some(cli::View::Snail) => plot_snail(&meta, &options),
         _ => (),
     }
