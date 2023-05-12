@@ -1,22 +1,16 @@
-use std::borrow::Borrow;
-use std::collections::HashMap;
-
-use std::str::FromStr;
-
-use svg::node::element::{Circle, Group, Rectangle};
+use svg::node::element::Rectangle;
 use svg::Document;
 
-use crate::utils::{linear_scale, linear_scale_float, max_float, scale_floats};
-use crate::{blobdir, cli, plot};
+use crate::cli::Origin;
+use crate::utils::linear_scale_float;
+use crate::{cli, plot};
 
 use plot::category::Category;
 
-use super::axis::{AxisName, AxisOptions, ChartAxes, Position, Scale};
+use super::axis::{AxisOptions, ChartAxes, Position, Scale};
 use super::blob::category_legend_full;
 use super::chart::{Chart, Dimensions};
-use super::component::{chart_axis, legend, LegendShape};
-use super::data::{Bin, HistogramData, Line, LineData, ScatterPoint};
-use super::style::{path_filled, path_open};
+use super::data::{Line, LineData};
 
 #[derive(Clone, Debug)]
 pub struct CumulativeData {
@@ -25,7 +19,7 @@ pub struct CumulativeData {
     pub cat_order: Vec<Category>,
 }
 
-pub fn cumulative_lines(cumulative_data: &CumulativeData, _options: &cli::PlotOptions) -> LineData {
+pub fn cumulative_lines(cumulative_data: &CumulativeData, options: &cli::PlotOptions) -> LineData {
     let dimensions = Dimensions {
         ..Default::default()
     };
@@ -34,6 +28,7 @@ pub fn cumulative_lines(cumulative_data: &CumulativeData, _options: &cli::PlotOp
     let x_axis = AxisOptions {
         position: Position::BOTTOM,
         label: "cumulative count".to_string(),
+        height: dimensions.height + dimensions.padding[0] + dimensions.padding[2],
         padding: [dimensions.padding[3], dimensions.padding[1]],
         offset: dimensions.height + dimensions.padding[0] + dimensions.padding[2],
         scale: Scale::LINEAR,
@@ -46,15 +41,20 @@ pub fn cumulative_lines(cumulative_data: &CumulativeData, _options: &cli::PlotOp
     let y_axis = AxisOptions {
         position: Position::LEFT,
         label: "cumulative length".to_string(),
+        height: dimensions.width + dimensions.padding[1] + dimensions.padding[3],
         padding: [dimensions.padding[2], dimensions.padding[0]],
         scale: Scale::LINEAR,
         domain: y_domain,
         range: y_range,
-        rotate: true,
+        rotate: false,
         ..Default::default()
     };
     let mut lines = vec![];
-    let cat_order = cumulative_data.cat_order.clone();
+    let mut cat_order = cumulative_data.cat_order.clone();
+    match options.origin {
+        Some(Origin::Y) => cat_order.sort_by(|x, y| y.span.cmp(&x.span)),
+        _ => (),
+    };
     // let mut ordered_points = vec![vec![]; cat_order.len()];
     let mut end_coords = [0.0, y_range[0]];
     for (index, cat) in cat_order.iter().enumerate() {
@@ -69,9 +69,18 @@ pub fn cumulative_lines(cumulative_data: &CumulativeData, _options: &cli::PlotOp
             // add coords to line
             cumulative_span += length;
             coords.push([
-                linear_scale_float((i + 1) as f64, &x_domain, &x_range),
-                linear_scale_float(cumulative_span as f64, &y_domain, &y_range),
+                coords[0][0] + linear_scale_float((i + 1) as f64, &x_domain, &x_range),
+                coords[0][1] - dimensions.height
+                    + linear_scale_float(cumulative_span as f64, &y_domain, &y_range),
             ]);
+        }
+        if index > 0 {
+            end_coords = match options.origin {
+                Some(Origin::X) | Some(Origin::Y) => {
+                    [coords[coords.len() - 1][0], coords[coords.len() - 1][1]]
+                }
+                _ => end_coords,
+            };
         }
         lines.push(Line {
             coords,
@@ -80,7 +89,8 @@ pub fn cumulative_lines(cumulative_data: &CumulativeData, _options: &cli::PlotOp
             weight: 3.0,
             cat_index: index,
             ..Default::default()
-        })
+        });
+
         //     ordered_points[*cat_index].push(ScatterPoint {
         //         x: x_scaled[i],
         //         y: y_scaled[i],
@@ -157,7 +167,7 @@ pub fn plot(dimensions: Dimensions, line_data: LineData, _options: &cli::PlotOpt
                     width - 185.0,
                     height
                         - dimensions.margin[2]
-                        - dimensions.padding[2]
+                        - dimensions.padding[2] * 2.0
                         - line_data.categories.len() as f64 * 26.0
                 ),
             ),

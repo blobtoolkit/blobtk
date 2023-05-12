@@ -65,6 +65,32 @@ impl Chart {
     pub fn svg(self) -> Group {
         let opacity = 0.6;
         let mut group = Group::new();
+        let mut axis_group = Group::new();
+        let mut gridline_group = Group::new();
+
+        if self.axes.x.is_some() {
+            let (axis, gridlines) = chart_axis(self.axes.x.as_ref().unwrap());
+            axis_group = axis_group.add(axis);
+            gridline_group = gridline_group.add(gridlines);
+        }
+        if self.axes.y.is_some() {
+            let (axis, gridlines) = chart_axis(self.axes.y.as_ref().unwrap());
+            axis_group = axis_group.add(axis);
+            gridline_group = gridline_group.add(gridlines);
+        }
+        if self.axes.x2.is_some() {
+            let (axis, gridlines) = chart_axis(self.axes.x2.as_ref().unwrap());
+            axis_group = axis_group.add(axis);
+            gridline_group = gridline_group.add(gridlines);
+        }
+        if self.axes.y2.is_some() {
+            let (axis, gridlines) = chart_axis(self.axes.y2.as_ref().unwrap());
+            axis_group = axis_group.add(axis);
+            gridline_group = gridline_group.add(gridlines);
+        }
+
+        group = group.add(gridline_group);
+
         if self.scatter_data.is_some() {
             let scatter_data = self.scatter_data.unwrap();
             let mut scatter_group = Group::new();
@@ -136,22 +162,7 @@ impl Chart {
                 ),
             ));
         }
-
-        if self.axes.x.is_some() {
-            group = group.add(chart_axis(&self.axes.x.unwrap()));
-        }
-        if self.axes.y.is_some() {
-            group = group.add(chart_axis(&self.axes.y.unwrap()));
-        }
-        if self.axes.x2.is_some() {
-            group = group.add(chart_axis(&self.axes.x2.unwrap()));
-        }
-        if self.axes.y2.is_some() {
-            group = group.add(chart_axis(&self.axes.y2.unwrap()));
-        }
-        // let x_axis = chart_axis(&scatter_data.x);
-        // let y_axis = chart_axis(&scatter_data.y);
-
+        group = group.add(axis_group);
         group
     }
 }

@@ -100,6 +100,7 @@ pub struct AxisOptions {
     pub position: Position,
     pub padding: [f64; 2],
     pub offset: f64,
+    pub height: f64,
     pub font_size: f64,
     pub weight: f64,
     pub color: String,
@@ -109,6 +110,7 @@ pub struct AxisOptions {
     pub clamp: Option<f64>,
     pub rotate: bool,
     pub tick_labels: bool,
+    pub gridlines: bool,
     pub tick_count: usize,
     pub major_ticks: Option<TickOptions>,
     pub minor_ticks: Option<TickOptions>,
@@ -122,6 +124,7 @@ impl Default for AxisOptions {
             position: Position::LEFT,
             padding: [0.0, 0.0],
             offset: 0.0,
+            height: 100.0,
             font_size: 30.0,
             weight: 3.0,
             color: "black".to_string(),
@@ -131,6 +134,7 @@ impl Default for AxisOptions {
             clamp: None,
             rotate: false,
             tick_labels: true,
+            gridlines: true,
             tick_count: 10,
             major_ticks: Some(TickOptions {
                 ..Default::default()

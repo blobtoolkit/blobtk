@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use std::str::FromStr;
 
-use svg::node::element::{Circle, Group, Rectangle};
+use svg::node::element::{Group, Rectangle};
 use svg::Document;
 
 use crate::utils::{max_float, scale_floats};
@@ -13,9 +13,8 @@ use plot::category::Category;
 
 use super::axis::{AxisName, AxisOptions, ChartAxes, Position, Scale};
 use super::chart::{Chart, Dimensions};
-use super::component::{chart_axis, legend, LegendEntry, LegendShape};
+use super::component::{legend, LegendEntry};
 use super::data::{Bin, HistogramData, ScatterData, ScatterPoint};
-use super::style::{path_filled, path_open};
 
 #[derive(Clone, Debug)]
 pub struct BlobData {
@@ -99,15 +98,20 @@ pub fn bin_axis(
         AxisName::Y => [0.0, dimensions.hist_width],
         _ => [0.0, dimensions.hist_height],
     };
+    let cat_order = blob_data.cat_order.clone();
     let mut histograms = vec![
         HistogramData {
             max_bin,
             width: dimensions.width,
             ..Default::default()
         };
-        blob_data.cat_order.len()
+        cat_order.len() - 1
     ];
-    for (i, cat) in blob_data.cat_order.iter().enumerate() {
+    for (j, cat) in cat_order.iter().enumerate() {
+        if j == 0 {
+            continue;
+        }
+        let i = j - 1;
         histograms[i] = HistogramData {
             bins: binned[i]
                 .iter()
@@ -152,6 +156,7 @@ pub fn blob_points(
     };
     let x_axis = AxisOptions {
         position: Position::BOTTOM,
+        height: dimensions.height + dimensions.padding[0] + dimensions.padding[2],
         label: axes["x"].clone(),
         padding: [dimensions.padding[3], dimensions.padding[1]],
         offset: dimensions.height + dimensions.padding[0] + dimensions.padding[2],
@@ -178,6 +183,7 @@ pub fn blob_points(
     };
     let y_axis = AxisOptions {
         position: Position::LEFT,
+        height: dimensions.width + dimensions.padding[1] + dimensions.padding[3],
         label: axes["y"].clone(),
         padding: [dimensions.padding[2], dimensions.padding[0]],
         scale: Scale::from_str(&y_meta.scale.unwrap()).unwrap(),
@@ -201,16 +207,16 @@ pub fn blob_points(
 
     let mut points = vec![];
     let cat_order = blob_data.cat_order.clone();
-    let mut ordered_points = vec![vec![]; cat_order.len()];
+    let mut ordered_points = vec![vec![]; cat_order.len() - 1];
     for (i, cat_index) in blob_data.cat.iter().enumerate() {
         let cat = cat_order[*cat_index].borrow();
-        ordered_points[*cat_index].push(ScatterPoint {
+        ordered_points[*cat_index - 1].push(ScatterPoint {
             x: x_scaled[i],
             y: y_scaled[i],
             z: z_scaled[i],
             label: Some(cat.title.clone()),
             color: Some(cat.color.clone()),
-            cat_index: *cat_index,
+            cat_index: *cat_index - 1,
             data_index: i,
         })
     }
@@ -226,7 +232,7 @@ pub fn blob_points(
     }
 }
 
-pub fn category_legend_full(categories: Vec<Category>, show_total: bool) -> Group {
+pub fn category_legend_full(categories: Vec<Category>, _show_total: bool) -> Group {
     let mut entries = vec![];
     for cat in categories {
         entries.push(LegendEntry {
@@ -286,6 +292,7 @@ pub fn plot(
             x: Some(AxisOptions {
                 label: "".to_string(),
                 offset: blob_dimensions.hist_height,
+                height: blob_dimensions.hist_height,
                 tick_labels: false,
                 ..x_opts.clone()
             }),
@@ -293,6 +300,9 @@ pub fn plot(
                 position: Position::LEFT,
                 label: "sum length".to_string(),
                 label_offset: 80.0,
+                height: blob_dimensions.width
+                    + blob_dimensions.padding[1]
+                    + blob_dimensions.padding[3],
                 font_size: 25.0,
                 scale: Scale::LINEAR,
                 domain: [0.0, x_max],
@@ -341,12 +351,16 @@ pub fn plot(
         axes: ChartAxes {
             x: Some(AxisOptions {
                 offset: 0.0,
+                height: blob_dimensions.hist_height,
                 label: "".to_string(),
                 tick_labels: false,
                 ..y_opts.clone()
             }),
             y: Some(AxisOptions {
                 position: Position::BOTTOM,
+                height: blob_dimensions.height
+                    + blob_dimensions.padding[0]
+                    + blob_dimensions.padding[2],
                 offset: blob_dimensions.height
                     + blob_dimensions.padding[0]
                     + blob_dimensions.padding[2],
@@ -440,102 +454,102 @@ pub fn plot(
     document
 }
 
-pub fn svg(
-    dimensions: &BlobDimensions,
-    scatter_data: &ScatterData,
-    hist_data_x: &Vec<HistogramData>,
-    hist_data_y: &Vec<HistogramData>,
-    _options: &cli::PlotOptions,
-) -> Document {
-    let mut scatter_group = Group::new().set(
-        "transform",
-        format!(
-            "translate({}, {})",
-            dimensions.padding[3], dimensions.padding[0]
-        ),
-    );
-    for point in scatter_data.points.iter() {
-        scatter_group = scatter_group.add(
-            Circle::new()
-                .set("cx", point.x)
-                .set("cy", point.y)
-                .set("r", point.z)
-                .set("fill", point.color.clone().unwrap())
-                .set("stroke", "#999999")
-                .set("opacity", 1),
-        );
-    }
-    let mut x_hist_group = Group::new().set(
-        "transform",
-        format!(
-            "translate({}, {})",
-            dimensions.padding[3], dimensions.hist_height
-        ),
-    );
-    for hist in hist_data_x {
-        let color;
-        color = hist.category.clone().unwrap().color;
-        x_hist_group = x_hist_group.add(path_open(
-            hist.clone().to_path_data(Position::BOTTOM, false),
-            Some(&color),
-            None,
-        ));
-    }
+// pub fn svg(
+//     dimensions: &BlobDimensions,
+//     scatter_data: &ScatterData,
+//     hist_data_x: &Vec<HistogramData>,
+//     hist_data_y: &Vec<HistogramData>,
+//     _options: &cli::PlotOptions,
+// ) -> Document {
+//     let mut scatter_group = Group::new().set(
+//         "transform",
+//         format!(
+//             "translate({}, {})",
+//             dimensions.padding[3], dimensions.padding[0]
+//         ),
+//     );
+//     for point in scatter_data.points.iter() {
+//         scatter_group = scatter_group.add(
+//             Circle::new()
+//                 .set("cx", point.x)
+//                 .set("cy", point.y)
+//                 .set("r", point.z)
+//                 .set("fill", point.color.clone().unwrap())
+//                 .set("stroke", "#999999")
+//                 .set("opacity", 1),
+//         );
+//     }
+//     let mut x_hist_group = Group::new().set(
+//         "transform",
+//         format!(
+//             "translate({}, {})",
+//             dimensions.padding[3], dimensions.hist_height
+//         ),
+//     );
+//     for hist in hist_data_x {
+//         let color;
+//         color = hist.category.clone().unwrap().color;
+//         x_hist_group = x_hist_group.add(path_open(
+//             hist.clone().to_path_data(Position::BOTTOM, false),
+//             Some(&color),
+//             None,
+//         ));
+//     }
 
-    let mut y_hist_group = Group::new().set(
-        "transform",
-        format!(
-            "translate({}, {})",
-            dimensions.width + dimensions.padding[3] + dimensions.margin[3],
-            dimensions.height + dimensions.padding[0] + dimensions.hist_width
-        ),
-    );
-    for hist in hist_data_y {
-        let color;
-        color = hist.category.clone().unwrap().color;
-        y_hist_group = y_hist_group.add(path_filled(
-            hist.clone().to_path_data(Position::LEFT, true),
-            Some(&color),
-        ));
-    }
+//     let mut y_hist_group = Group::new().set(
+//         "transform",
+//         format!(
+//             "translate({}, {})",
+//             dimensions.width + dimensions.padding[3] + dimensions.margin[3],
+//             dimensions.height + dimensions.padding[0] + dimensions.hist_width
+//         ),
+//     );
+//     for hist in hist_data_y {
+//         let color;
+//         color = hist.category.clone().unwrap().color;
+//         y_hist_group = y_hist_group.add(path_filled(
+//             hist.clone().to_path_data(Position::LEFT, true),
+//             Some(&color),
+//         ));
+//     }
 
-    let x_axis = chart_axis(&scatter_data.x);
-    let y_axis = chart_axis(&scatter_data.y);
+//     let x_axis = chart_axis(&scatter_data.x);
+//     let y_axis = chart_axis(&scatter_data.y);
 
-    let blob_group = Group::new()
-        .set(
-            "transform",
-            format!(
-                "translate({}, {})",
-                dimensions.margin[3], dimensions.margin[0]
-            ),
-        )
-        .add(scatter_group)
-        .add(x_hist_group)
-        .add(y_hist_group)
-        .add(x_axis)
-        .add(y_axis);
-    let height = dimensions.height
-        + dimensions.hist_height
-        + dimensions.margin[0]
-        + dimensions.margin[2]
-        + dimensions.padding[0]
-        + dimensions.padding[2];
-    let width = dimensions.width
-        + dimensions.hist_width
-        + dimensions.margin[1]
-        + dimensions.margin[3]
-        + dimensions.padding[1]
-        + dimensions.padding[3];
-    let document = Document::new()
-        .set("viewBox", (0, 0, height, width))
-        .add(
-            Rectangle::new()
-                .set("fill", "#ffffff")
-                .set("stroke", "none")
-                .set("width", height)
-                .set("height", width),
-        )
-        .add(blob_group);
-    document
-}
+//     let blob_group = Group::new()
+//         .set(
+//             "transform",
+//             format!(
+//                 "translate({}, {})",
+//                 dimensions.margin[3], dimensions.margin[0]
+//             ),
+//         )
+//         .add(scatter_group)
+//         .add(x_hist_group)
+//         .add(y_hist_group)
+//         .add(x_axis)
+//         .add(y_axis);
+//     let height = dimensions.height
+//         + dimensions.hist_height
+//         + dimensions.margin[0]
+//         + dimensions.margin[2]
+//         + dimensions.padding[0]
+//         + dimensions.padding[2];
+//     let width = dimensions.width
+//         + dimensions.hist_width
+//         + dimensions.margin[1]
+//         + dimensions.margin[3]
+//         + dimensions.padding[1]
+//         + dimensions.padding[3];
+//     let document = Document::new()
+//         .set("viewBox", (0, 0, height, width))
+//         .add(
+//             Rectangle::new()
+//                 .set("fill", "#ffffff")
+//                 .set("stroke", "none")
+//                 .set("width", height)
+//                 .set("height", width),
+//         )
+//         .add(blob_group);
+//     document
+// }

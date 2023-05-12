@@ -10,6 +10,7 @@ use svg::node::Text as nodeText;
 use crate::utils::{format_si, linear_scale, linear_scale_float, scale_float, scale_floats};
 
 use super::axis::{AxisOptions, Position, Scale, TickOptions, TickStatus};
+use super::style::path_open;
 
 #[derive(Clone, Debug)]
 pub struct RadialTick {
@@ -28,7 +29,20 @@ pub struct Tick {
     pub label: Text,
     pub path: Path,
     pub position: f64,
+    pub gridline: Path,
     pub status: TickStatus,
+}
+
+impl Default for Tick {
+    fn default() -> Tick {
+        Tick {
+            label: Text::new(),
+            path: Path::new(),
+            position: 0.0,
+            gridline: Path::new(),
+            status: TickStatus::Major,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -104,16 +118,20 @@ pub fn legend(
             .set("x", position)
             .set("y", cell + gap / 2)
             .add(nodeText::new(&entry.clone().title));
-        let entry_subtext = Text::new()
-            .set("font-family", "Roboto, Open sans, sans-serif")
-            .set("font-size", cell as f64 * 0.9)
-            .set("text-anchor", "start")
-            .set("dominant-baseline", "bottom")
-            .set("stroke", "none")
-            .set("fill", "black")
-            .set("x", cell + gap)
-            .set("y", cell * 9 / 10 + gap / 2)
-            .add(nodeText::new(entry.clone().subtitle.clone().unwrap()));
+        let entry_subtext = if entry.subtitle.is_some() {
+            Text::new()
+                .set("font-family", "Roboto, Open sans, sans-serif")
+                .set("font-size", cell as f64 * 0.9)
+                .set("text-anchor", "start")
+                .set("dominant-baseline", "bottom")
+                .set("stroke", "none")
+                .set("fill", "black")
+                .set("x", cell + gap)
+                .set("y", cell * 9 / 10 + gap / 2)
+                .add(nodeText::new(entry.clone().subtitle.clone().unwrap()))
+        } else {
+            Text::new()
+        };
         let background = Group::new().add(
             Rectangle::new()
                 .set("stroke", "none")
@@ -283,6 +301,7 @@ pub fn set_tick(
             TickStatus::Major => TickStatus::Major,
             TickStatus::Minor => TickStatus::Minor,
         },
+        ..Default::default()
     }
 }
 
@@ -300,57 +319,75 @@ pub fn create_tick(
         &axis_options.scale,
         None,
     );
+    let axis_height = axis_options.height;
     let rotate = axis_options.rotate;
-    let (x1, y1, x2, y2, x_text, y_text, anchor, baseline, angle) = match axis_options.position {
-        Position::TOP => (
-            location,
-            axis_options.offset,
-            location,
-            axis_options.offset - tick_options.length,
-            location,
-            axis_options.offset - tick_options.length * 1.5,
-            if rotate { "end" } else { "middle" },
-            if rotate { "central" } else { "auto" },
-            if rotate { 90.0 } else { 0.0 },
-        ),
-        Position::RIGHT => (
-            axis_options.offset,
-            location,
-            axis_options.offset + tick_options.length,
-            location,
-            axis_options.offset + tick_options.length * 1.5,
-            location,
-            "middle",
-            "hanging",
-            270.0,
-        ),
-        Position::BOTTOM => (
-            location,
-            axis_options.offset,
-            location,
-            axis_options.offset + tick_options.length,
-            location,
-            axis_options.offset + tick_options.length * 1.5,
-            if rotate { "start" } else { "middle" },
-            if rotate { "central" } else { "hanging" },
-            if rotate { 90.0 } else { 0.0 },
-        ),
-        Position::LEFT => (
-            axis_options.offset,
-            location,
-            axis_options.offset - tick_options.length,
-            location,
-            axis_options.offset - tick_options.length * 1.5,
-            location,
-            if rotate { "end" } else { "middle" },
-            if rotate { "central" } else { "hanging" },
-            if rotate { 0.0 } else { 90.0 },
-        ),
-    };
+    let (x1, y1, x2, y2, x3, y3, x_text, y_text, anchor, baseline, angle) =
+        match axis_options.position {
+            Position::TOP => (
+                location,
+                axis_options.offset,
+                location,
+                axis_options.offset - tick_options.length,
+                location,
+                axis_height,
+                location,
+                axis_options.offset - tick_options.length * 1.5,
+                if rotate { "end" } else { "middle" },
+                if rotate { "central" } else { "auto" },
+                if rotate { 90.0 } else { 0.0 },
+            ),
+            Position::RIGHT => (
+                axis_options.offset,
+                location,
+                axis_options.offset + tick_options.length,
+                location,
+                axis_height,
+                location,
+                axis_options.offset + tick_options.length * 1.5,
+                location,
+                "middle",
+                "hanging",
+                270.0,
+            ),
+            Position::BOTTOM => (
+                location,
+                axis_options.offset,
+                location,
+                axis_options.offset + tick_options.length,
+                location,
+                axis_options.offset - axis_height,
+                location,
+                axis_options.offset + tick_options.length * 1.5,
+                if rotate { "start" } else { "middle" },
+                if rotate { "central" } else { "hanging" },
+                if rotate { 90.0 } else { 0.0 },
+            ),
+            Position::LEFT => (
+                axis_options.offset,
+                location,
+                axis_options.offset - tick_options.length,
+                location,
+                axis_height,
+                location,
+                axis_options.offset - tick_options.length * 1.5,
+                location,
+                if rotate { "end" } else { "middle" },
+                if rotate { "central" } else { "hanging" },
+                if rotate { 0.0 } else { 90.0 },
+            ),
+        };
     let path_data = Data::new().move_to((x1, y1)).line_to((x2, y2));
     let path = match tick_options.status {
         TickStatus::Major => path_axis_major(path_data, Some(&axis_options.color)),
         TickStatus::Minor => path_axis_minor(path_data, Some(&axis_options.color)),
+    };
+    let gridline = match tick_options.status {
+        TickStatus::Major => path_open(
+            Data::new().move_to((x1, y1)).line_to((x3, y3)),
+            Some("#cccccc"),
+            Some(1.0),
+        ),
+        _ => Path::new(),
     };
     let text = if axis_options.tick_labels {
         match tick_options.status {
@@ -376,7 +413,9 @@ pub fn create_tick(
         label: text,
         path,
         position: location,
+        gridline,
         status: tick_options.status.clone(),
+        ..Default::default()
     }
 }
 
@@ -422,7 +461,7 @@ pub fn create_axis_ticks(options: &AxisOptions, status: TickStatus) -> Vec<Tick>
                         i = -i
                     }
                     while i <= domain[1].clone() {
-                        let label = if i > min_value.clone() {
+                        let label = if i >= min_value.clone() {
                             format_si(&i, 3)
                         } else {
                             String::new()
@@ -490,7 +529,7 @@ pub fn create_axis_ticks(options: &AxisOptions, status: TickStatus) -> Vec<Tick>
                 TickStatus::Major => {
                     let mut i = step * (min_value / step).ceil();
                     while i <= domain[1].clone() {
-                        let label = if i > min_value.clone() {
+                        let label = if i >= min_value.clone() {
                             format_si(&i, 3)
                         } else {
                             String::new()
@@ -985,12 +1024,14 @@ pub fn polar_to_path_bounded(
     path_data
 }
 
-pub fn chart_axis(plot_axis: &AxisOptions) -> Group {
+pub fn chart_axis(plot_axis: &AxisOptions) -> (Group, Group) {
     let mut major_tick_group = Group::new();
+    let mut major_gridline_group = Group::new();
     if plot_axis.major_ticks.is_some() {
         let major_ticks = create_axis_ticks(&plot_axis, TickStatus::Major);
         for tick in major_ticks {
             major_tick_group = major_tick_group.add(tick.path).add(tick.label);
+            major_gridline_group = major_gridline_group.add(tick.gridline);
         }
     };
 
@@ -1067,9 +1108,12 @@ pub fn chart_axis(plot_axis: &AxisOptions) -> Group {
         )
         .add(nodeText::new(plot_axis.label.clone()));
 
-    Group::new()
-        .add(minor_tick_group)
-        .add(major_tick_group)
-        .add(axis)
-        .add(label)
+    (
+        Group::new()
+            .add(minor_tick_group)
+            .add(major_tick_group)
+            .add(axis)
+            .add(label),
+        Group::new().add(major_gridline_group),
+    )
 }

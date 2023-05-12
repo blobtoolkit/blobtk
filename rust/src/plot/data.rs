@@ -51,17 +51,13 @@ impl Default for Line {
 
 impl Line {
     pub fn to_path_data(self, position: Position, _filled: bool) -> Data {
-        let width = 900.0;
+        let _width = 900.0;
         let height = 900.0;
-        let shift = height;
-        let mut path_data = match position {
-            Position::TOP => Data::new().move_to((0.0, shift)),
-            Position::BOTTOM => Data::new().move_to((0.0, shift)),
-            Position::RIGHT => Data::new().move_to((0.0, width)),
-            Position::LEFT => Data::new().move_to((0.0, width)),
-        };
+        let _shift = height;
+        let mut path_data = Data::new().move_to((self.coords[0][0], self.coords[0][1]));
         for coord in self.coords.iter() {
             path_data = match position {
+                // TODO: orient line correctly for Position::TOP, LEFT & RIGHT
                 Position::TOP => path_data.line_to((coord[0], height - coord[1])),
                 Position::BOTTOM => path_data.line_to((coord[0], coord[1])),
                 Position::RIGHT => path_data.line_to((coord[1], coord[0])),
