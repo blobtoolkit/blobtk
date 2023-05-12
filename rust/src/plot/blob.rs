@@ -13,7 +13,7 @@ use plot::category::Category;
 
 use super::axis::{AxisName, AxisOptions, ChartAxes, Position, Scale};
 use super::chart::{Chart, Dimensions};
-use super::component::{chart_axis, legend, LegendShape};
+use super::component::{chart_axis, legend, LegendEntry, LegendShape};
 use super::data::{Bin, HistogramData, ScatterData, ScatterPoint};
 use super::style::{path_filled, path_open};
 
@@ -208,7 +208,7 @@ pub fn blob_points(
             x: x_scaled[i],
             y: y_scaled[i],
             z: z_scaled[i],
-            label: Some(cat.label.clone()),
+            label: Some(cat.title.clone()),
             color: Some(cat.color.clone()),
             cat_index: *cat_index,
             data_index: i,
@@ -226,10 +226,15 @@ pub fn blob_points(
     }
 }
 
-pub fn category_legend_full(categories: Vec<Category>) -> Group {
+pub fn category_legend_full(categories: Vec<Category>, show_total: bool) -> Group {
     let mut entries = vec![];
     for cat in categories {
-        entries.push((format!("{}", cat.label), cat.color, LegendShape::Rect));
+        entries.push(LegendEntry {
+            title: format!("{}", cat.title),
+            color: cat.color.clone(),
+            subtitle: Some(cat.subtitle()),
+            ..Default::default()
+        });
     }
     let title = "".to_string();
     legend(title, entries, None, 1)
@@ -427,17 +432,9 @@ pub fn plot(
                 blob_dimensions.hist_height + blob_dimensions.margin[0]
             ),
         ))
-        .add(category_legend_full(scatter_data.categories).set(
+        .add(category_legend_full(scatter_data.categories, false).set(
             "transform",
-            format!(
-                "translate({}, {})",
-                blob_dimensions.margin[3]
-                    + blob_dimensions.width
-                    + blob_dimensions.padding[1]
-                    + blob_dimensions.padding[3]
-                    + 10.0,
-                10.0
-            ),
+            format!("translate({}, {})", width - 185.0, 10.0),
         ));
 
     document

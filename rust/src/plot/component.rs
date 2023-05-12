@@ -38,9 +38,27 @@ pub enum LegendShape {
     Radius,
 }
 
+pub struct LegendEntry {
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub color: String,
+    pub shape: LegendShape,
+}
+
+impl Default for LegendEntry {
+    fn default() -> LegendEntry {
+        LegendEntry {
+            title: "".to_string(),
+            subtitle: None,
+            color: "#000000".to_string(),
+            shape: LegendShape::Rect,
+        }
+    }
+}
+
 pub fn legend(
     title: String,
-    entries: Vec<(String, String, LegendShape)>,
+    entries: Vec<LegendEntry>,
     subtitle: Option<String>,
     columns: u8,
 ) -> Group {
@@ -57,7 +75,7 @@ pub fn legend(
             .add(nodeText::new(title.clone()))
     };
     let mut group = Group::new().add(title_text);
-    let cell = 18;
+    let cell: i32 = 18;
     let gap = 8;
     let mut offset_y = 0;
     let mut offset_x: i32 = -175;
@@ -67,34 +85,51 @@ pub fn legend(
             offset_x += 175;
             offset_y = if title.is_empty() { 0 } else { gap / 2 };
         }
+        let title_width = cell + gap + entry.title.len() as i32 * cell * 11 / 20;
+        let mut rect_width = title_width;
+        let (anchor, position, rect_x) = match entry.subtitle {
+            Some(_) => {
+                rect_width += gap + entry.subtitle.clone().unwrap().len() as i32 * cell * 11 / 20;
+                ("end", -gap, -gap - title_width)
+            }
+            None => ("start", cell + gap, -gap / 2),
+        };
         let entry_text = Text::new()
             .set("font-family", "Roboto, Open sans, sans-serif")
             .set("font-size", cell)
+            .set("text-anchor", anchor)
+            .set("dominant-baseline", "bottom")
+            .set("stroke", "none")
+            .set("fill", "black")
+            .set("x", position)
+            .set("y", cell + gap / 2)
+            .add(nodeText::new(&entry.clone().title));
+        let entry_subtext = Text::new()
+            .set("font-family", "Roboto, Open sans, sans-serif")
+            .set("font-size", cell as f64 * 0.9)
             .set("text-anchor", "start")
             .set("dominant-baseline", "bottom")
             .set("stroke", "none")
             .set("fill", "black")
             .set("x", cell + gap)
-            .set("y", cell + gap / 2)
-            .add(nodeText::new(&entry.clone().0));
+            .set("y", cell * 9 / 10 + gap / 2)
+            .add(nodeText::new(entry.clone().subtitle.clone().unwrap()));
         let background = Group::new().add(
             Rectangle::new()
                 .set("stroke", "none")
                 .set("fill", "#ffffff")
-                .set("x", -gap / 2)
+                .set("x", rect_x)
                 .set("y", gap / 2)
-                .set("height", cell + gap / 2)
-                .set(
-                    "width",
-                    cell as f64 + gap as f64 + entry.0.len() as f64 * cell as f64 * 0.7,
-                ),
+                .set("height", cell + gap)
+                .set("width", rect_width)
+                .set("opacity", 0.95),
         );
-        let shape = match entry.2 {
+        let shape = match entry.shape {
             LegendShape::Rect => Group::new().add(
                 Rectangle::new()
                     .set("stroke", "black")
                     .set("stroke-width", 2)
-                    .set("fill", entry.clone().1.clone())
+                    .set("fill", entry.color.clone())
                     .set("x", 0)
                     .set("y", 6)
                     .set("height", cell)
@@ -105,7 +140,7 @@ pub fn legend(
                     Circle::new()
                         .set("stroke", "black")
                         .set("stroke-width", 2)
-                        .set("fill", entry.clone().1.clone())
+                        .set("fill", entry.color.clone())
                         .set("cx", cell / 2)
                         .set("cy", 6 + cell / 2)
                         .set("r", cell / 2),
@@ -125,7 +160,7 @@ pub fn legend(
                     Circle::new()
                         .set("stroke", "black")
                         .set("stroke-width", 1)
-                        .set("fill", entry.clone().1.clone())
+                        .set("fill", entry.color.clone())
                         .set("cx", cell / 2)
                         .set("cy", 6 + cell / 2)
                         .set("r", cell / 2),
@@ -148,7 +183,8 @@ pub fn legend(
             )
             .add(background)
             .add(shape)
-            .add(entry_text);
+            .add(entry_text)
+            .add(entry_subtext);
         group = group.add(entry_group);
         offset_y = offset_y + cell + gap;
     }

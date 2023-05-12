@@ -19,6 +19,7 @@ use usvg::{fontdb, TreeParsing, TreeTextToPath};
 
 use self::axis::AxisName;
 use self::blob::BlobDimensions;
+use self::chart::Dimensions;
 
 /// Plot axis functions.
 pub mod axis;
@@ -318,27 +319,19 @@ pub fn plot_cumulative(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     let wanted_indices = blobdir::set_filters(filters, &meta, &options.blobdir);
 
     let cumulative_data = CumulativeData {
-        z: blobdir::apply_filter_float(&plot_values["z"], &wanted_indices),
+        values: blobdir::apply_filter_float(&plot_values["z"], &wanted_indices),
         cat: blobdir::apply_filter_int(&cat_indices, &wanted_indices),
         cat_order,
     };
 
-    // let cumulative_data = cumulative::cumulative_lines(plot_meta, &cumulative_data, &meta, &options);
+    let cumulative_lines = cumulative::cumulative_lines(&cumulative_data, &options);
 
-    // let dimensions = BlobDimensions {
-    //     ..Default::default()
-    // };
+    let dimensions = Dimensions {
+        ..Default::default()
+    };
 
-    // let document: Document = blob::plot(
-    //     dimensions,
-    //     scatter_data,
-    //     x_bins,
-    //     y_bins,
-    //     x_max,
-    //     y_max,
-    //     &options,
-    // );
-    // save_by_suffix(options, document);
+    let document: Document = cumulative::plot(dimensions, cumulative_lines, &options);
+    save_by_suffix(options, document);
 }
 
 /// Execute the `plot` subcommand from `blobtk`.

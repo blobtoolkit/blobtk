@@ -13,7 +13,8 @@ use crate::blobdir::{self, BuscoGene};
 use super::axis::{TickOptions, TickStatus};
 use super::component::{
     arc_path, legend, path_axis_major, path_axis_minor, path_gridline_major, path_gridline_minor,
-    polar_to_path, polar_to_path_bounded, set_axis_ticks, set_axis_ticks_circular, LegendShape,
+    polar_to_path, polar_to_path_bounded, set_axis_ticks, set_axis_ticks_circular, LegendEntry,
+    LegendShape,
 };
 use super::style::{path_filled, path_open, path_partial};
 use crate::cli;
@@ -262,31 +263,31 @@ pub fn scaffold_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOption
     let n50_length = format_si(&(snail_stats.binned_scaffold_lengths()[n50_bin] as f64), 3);
     let n90_length = format_si(&(snail_stats.binned_scaffold_lengths()[n90_bin] as f64), 3);
     let record = snail_stats.record_type();
-    entries.push((
-        format!("Log10 {} count (total {})", record, scaffold_count),
-        "#dddddd".to_string(),
-        LegendShape::Rect,
-    ));
-    entries.push((
-        format!("{} length (total {})", titlecase(record), scaffold_length),
-        "#999999".to_string(),
-        LegendShape::Rect,
-    ));
-    entries.push((
-        format!("Longest {} ({})", record, longest_scaffold),
-        "#e31a1c".to_string(),
-        LegendShape::Rect,
-    ));
-    entries.push((
-        format!("N50 length ({})", n50_length),
-        "#ff7f00".to_string(),
-        LegendShape::Rect,
-    ));
-    entries.push((
-        format!("N90 length ({})", n90_length),
-        "#fdbf6f".to_string(),
-        LegendShape::Rect,
-    ));
+    entries.push(LegendEntry {
+        title: format!("Log10 {} count (total {})", record, scaffold_count),
+        color: "#dddddd".to_string(),
+        ..Default::default()
+    });
+    entries.push(LegendEntry {
+        title: format!("{} length (total {})", titlecase(record), scaffold_length),
+        color: "#999999".to_string(),
+        ..Default::default()
+    });
+    entries.push(LegendEntry {
+        title: format!("Longest {} ({})", record, longest_scaffold),
+        color: "#e31a1c".to_string(),
+        ..Default::default()
+    });
+    entries.push(LegendEntry {
+        title: format!("N50 length ({})", n50_length),
+        color: "#ff7f00".to_string(),
+        ..Default::default()
+    });
+    entries.push(LegendEntry {
+        title: format!("N90 length ({})", n90_length),
+        color: "#fdbf6f".to_string(),
+        ..Default::default()
+    });
 
     let title = format!("{} statistics", titlecase(record));
     legend(title, entries, None, 1)
@@ -297,21 +298,21 @@ pub fn composition_stats_legend(snail_stats: &SnailStats, _: &cli::PlotOptions) 
     let gc_prop = format_si(&(snail_stats.gc_proportion as f64 * 100.0), 3);
     let at_prop = format_si(&(snail_stats.at_proportion as f64 * 100.0), 3);
     let n_prop = format_si(&(snail_stats.n_proportion as f64 * 100.0), 3);
-    entries.push((
-        format!("GC ({}%)", gc_prop),
-        "#1f78b4".to_string(),
-        LegendShape::Rect,
-    ));
-    entries.push((
-        format!("AT ({}%)", at_prop),
-        "#a6cee3".to_string(),
-        LegendShape::Rect,
-    ));
-    entries.push((
-        format!("N ({}%)", n_prop),
-        "#ffffff".to_string(),
-        LegendShape::Rect,
-    ));
+    entries.push(LegendEntry {
+        title: format!("GC ({}%)", gc_prop),
+        color: "#1f78b4".to_string(),
+        ..Default::default()
+    });
+    entries.push(LegendEntry {
+        title: format!("AT ({}%)", at_prop),
+        color: "#a6cee3".to_string(),
+        ..Default::default()
+    });
+    entries.push(LegendEntry {
+        title: format!("N ({}%)", n_prop),
+        color: "#ffffff".to_string(),
+        ..Default::default()
+    });
 
     let title = "Composition".to_string();
     legend(title, entries, None, 1)
@@ -329,16 +330,18 @@ pub fn scale_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOptions) 
     };
     let circ_prop = format_si(&(max_span as f64), 3);
     let rad_prop = format_si(&(max_scaffold as f64), 3);
-    entries.push((
-        format!("{}", circ_prop),
-        "#ffffff".to_string(),
-        LegendShape::Circumference,
-    ));
-    entries.push((
-        format!("{}", rad_prop),
-        "#ffffff".to_string(),
-        LegendShape::Radius,
-    ));
+    entries.push(LegendEntry {
+        title: format!("{}", circ_prop),
+        color: "#ffffff".to_string(),
+        shape: LegendShape::Circumference,
+        ..Default::default()
+    });
+    entries.push(LegendEntry {
+        title: format!("{}", rad_prop),
+        color: "#ffffff".to_string(),
+        shape: LegendShape::Radius,
+        ..Default::default()
+    });
 
     let title = "Scale".to_string();
     legend(title, entries, None, 1)
@@ -376,26 +379,26 @@ pub fn busco_stats_legend(snail_stats: &SnailStats, _: &cli::PlotOptions) -> Gro
         snail_stats.busco_lineage,
         snail_stats.busco_total()
     );
-    entries.push((
-        format!("Comp. ({}%)", comp_prop),
-        "#33a02c".to_string(),
-        LegendShape::Rect,
-    ));
-    entries.push((
-        format!("Dupl. ({}%)", dup_prop),
-        "#20641b".to_string(),
-        LegendShape::Rect,
-    ));
-    entries.push((
-        format!("Frag. ({}%)", frag_prop),
-        "#a3e27f".to_string(),
-        LegendShape::Rect,
-    ));
-    entries.push((
-        format!("Missing ({}%)", missing_prop),
-        "#ffffff".to_string(),
-        LegendShape::Rect,
-    ));
+    entries.push(LegendEntry {
+        title: format!("Comp. ({}%)", comp_prop),
+        color: "#33a02c".to_string(),
+        ..Default::default()
+    });
+    entries.push(LegendEntry {
+        title: format!("Dupl. ({}%)", dup_prop),
+        color: "#20641b".to_string(),
+        ..Default::default()
+    });
+    entries.push(LegendEntry {
+        title: format!("Frag. ({}%)", frag_prop),
+        color: "#a3e27f".to_string(),
+        ..Default::default()
+    });
+    entries.push(LegendEntry {
+        title: format!("Missing ({}%)", missing_prop),
+        color: "#ffffff".to_string(),
+        ..Default::default()
+    });
 
     let title = "BUSCO".to_string();
     legend(title, entries, Some(subtitle), 2)

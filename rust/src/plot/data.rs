@@ -33,6 +33,7 @@ pub struct Line {
     pub coords: Vec<[f64; 2]>,
     pub label: Option<String>,
     pub color: Option<String>,
+    pub weight: f64,
     pub cat_index: usize,
 }
 
@@ -42,8 +43,33 @@ impl Default for Line {
             coords: vec![],
             label: None,
             color: None,
+            weight: 2.0,
             cat_index: 0,
         }
+    }
+}
+
+impl Line {
+    pub fn to_path_data(self, position: Position, _filled: bool) -> Data {
+        let width = 900.0;
+        let height = 900.0;
+        let shift = height;
+        let mut path_data = match position {
+            Position::TOP => Data::new().move_to((0.0, shift)),
+            Position::BOTTOM => Data::new().move_to((0.0, shift)),
+            Position::RIGHT => Data::new().move_to((0.0, width)),
+            Position::LEFT => Data::new().move_to((0.0, width)),
+        };
+        for coord in self.coords.iter() {
+            path_data = match position {
+                Position::TOP => path_data.line_to((coord[0], height - coord[1])),
+                Position::BOTTOM => path_data.line_to((coord[0], coord[1])),
+                Position::RIGHT => path_data.line_to((coord[1], coord[0])),
+                Position::LEFT => path_data.line_to((coord[1], coord[0])),
+            };
+        }
+
+        path_data
     }
 }
 

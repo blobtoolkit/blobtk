@@ -57,7 +57,11 @@ pub fn format_si(value: &f64, digits: u32) -> String {
         suffix.to_string()
     }
 
-    let magnitude = (value.clone()).log10() as i8;
+    let magnitude = if *value == 0.0 {
+        0
+    } else {
+        (value.clone()).log10() as i8
+    };
     let prefix;
     let thousands = magnitude / 3;
     if thousands < 0 {
@@ -118,6 +122,15 @@ pub fn linear_scale(value: usize, domain: &[usize; 2], range: &[f64; 2]) -> f64 
     (range[1] - range[0]) * proportion + range[0]
 }
 
+/// Scale a f64 value from input domain to output range as f64.
+/// # Examples
+///
+/// ```
+/// # use crate::blobtk::utils::linear_scale_float;
+/// let domain = [10.0, 20.0];
+/// let range = [0.0, 100.0];
+/// assert_eq!(linear_scale_float(15.0, &domain, &range), 50.0);
+/// ```
 pub fn linear_scale_float(value: f64, domain: &[f64; 2], range: &[f64; 2]) -> f64 {
     let proportion = (value - domain[0]) / (domain[1] - domain[0]);
     (range[1] - range[0]) * proportion + range[0]

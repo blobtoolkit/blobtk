@@ -3,7 +3,7 @@ use svg::node::element::{Circle, Group};
 use super::{
     axis::ChartAxes,
     component::chart_axis,
-    data::{HistogramData, ScatterData},
+    data::{HistogramData, LineData, ScatterData},
     style::{path_filled, path_open},
 };
 
@@ -31,8 +31,9 @@ pub struct Chart {
     pub axes: ChartAxes,
     pub scatter_data: Option<ScatterData>,
     // pub bar_data: Option<BarData>,
-    // pub line_data: Option<LineData>,
+    pub line_data: Option<LineData>,
     pub histogram_data: Option<Vec<HistogramData>>,
+    pub line_options: Vec<(String, String)>,
     pub scatter_options: Vec<(String, String)>,
     pub histogram_options: Vec<(String, String)>,
     pub dimensions: Dimensions,
@@ -47,8 +48,10 @@ impl Default for Chart {
                 x2: None,
                 y2: None,
             },
+            line_data: None,
             scatter_data: None,
             histogram_data: None,
+            line_options: vec![],
             scatter_options: vec![],
             histogram_options: vec![],
             dimensions: Dimensions {
@@ -101,6 +104,31 @@ impl Chart {
                 hist_group = hist_group.add(path_open(path, Some(&color), Some(2.0)));
             }
             group = group.add(hist_group.set(
+                "transform",
+                format!(
+                    "translate({}, {})",
+                    self.dimensions.padding[3], self.dimensions.padding[2]
+                ),
+            ));
+        }
+        if self.line_data.is_some() {
+            let mut line_group = Group::new();
+            let line_data = self.line_data.unwrap();
+            for line in line_data.lines.iter() {
+                let color = match line.color.clone() {
+                    Some(col) => col.clone(),
+                    None => "#000000".to_string(),
+                };
+                let path_data = line
+                    .clone()
+                    .to_path_data(self.axes.x.clone().unwrap().position, true);
+                line_group = line_group.add(
+                    path_open(path_data.clone(), Some(&color), Some(line.weight))
+                        .set("stroke-linecap", "round")
+                        .set("stroke-linejoin", "round"),
+                );
+            }
+            group = group.add(line_group.set(
                 "transform",
                 format!(
                     "translate({}, {})",
