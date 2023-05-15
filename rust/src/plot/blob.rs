@@ -37,11 +37,14 @@ pub struct BlobDimensions {
 
 impl Default for BlobDimensions {
     fn default() -> BlobDimensions {
+        let dimensions = Dimensions {
+            ..Default::default()
+        };
         BlobDimensions {
-            height: 900.0,
-            width: 900.0,
-            margin: [10.0, 10.0, 100.0, 100.0],
-            padding: [50.0, 50.0, 50.0, 50.0],
+            height: dimensions.height,
+            width: dimensions.width,
+            margin: dimensions.margin,
+            padding: dimensions.padding,
             hist_height: 250.0,
             hist_width: 250.0,
         }
@@ -75,6 +78,11 @@ pub fn bin_axis(
         AxisName::Z => scatter_data.z.range.clone(),
         _ => [0.0, 100.0],
     };
+    let width = match axis {
+        AxisName::X => dimensions.width,
+        AxisName::Y => dimensions.height,
+        _ => 100.0,
+    };
     let bin_size = (range[1] - range[0]) / options.resolution as f64;
     let mut binned = vec![vec![0.0; options.resolution]; options.cat_count];
     let mut max_bin = 0.0;
@@ -92,7 +100,7 @@ pub fn bin_axis(
         binned[cat_index][bin] += blob_data.z[point.data_index];
         max_bin = max_float(max_bin, binned[cat_index][bin]);
     }
-    let width = dimensions.width / options.resolution as f64;
+    let bin_width = width / options.resolution as f64;
     let domain = [0.0, max_bin];
     let range = match axis {
         AxisName::Y => [0.0, dimensions.hist_width],
@@ -102,7 +110,7 @@ pub fn bin_axis(
     let mut histograms = vec![
         HistogramData {
             max_bin,
-            width: dimensions.width,
+            width,
             ..Default::default()
         };
         cat_order.len() - 1
@@ -117,14 +125,14 @@ pub fn bin_axis(
                 .iter()
                 .map(|value| Bin {
                     height: scale_floats(*value, &domain, &range, &Scale::LINEAR, None),
-                    width,
+                    width: bin_width,
                     value: *value,
                 })
                 .collect(),
             max_bin: scale_floats(max_bin, &domain, &range, &Scale::LINEAR, None),
-            width: dimensions.width,
             axis: axis.clone(),
             category: Some(cat.clone()),
+            ..histograms[i]
         }
     }
     (histograms, max_bin)
@@ -133,12 +141,10 @@ pub fn bin_axis(
 pub fn blob_points(
     axes: HashMap<String, String>,
     blob_data: &BlobData,
+    dimensions: &BlobDimensions,
     meta: &blobdir::Meta,
     _options: &cli::PlotOptions,
 ) -> ScatterData {
-    let dimensions = BlobDimensions {
-        ..Default::default()
-    };
     let default_clamp = 0.1;
     let fields = meta.field_list.clone().unwrap();
     let x_meta = fields[axes["x"].as_str()].clone();

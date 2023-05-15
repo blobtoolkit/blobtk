@@ -19,10 +19,11 @@ pub struct CumulativeData {
     pub cat_order: Vec<Category>,
 }
 
-pub fn cumulative_lines(cumulative_data: &CumulativeData, options: &cli::PlotOptions) -> LineData {
-    let dimensions = Dimensions {
-        ..Default::default()
-    };
+pub fn cumulative_lines(
+    cumulative_data: &CumulativeData,
+    dimensions: &Dimensions,
+    options: &cli::PlotOptions,
+) -> LineData {
     let x_domain = [0.0, cumulative_data.values.len() as f64];
     let x_range = [0.0, dimensions.width];
     let x_axis = AxisOptions {
@@ -40,13 +41,14 @@ pub fn cumulative_lines(cumulative_data: &CumulativeData, options: &cli::PlotOpt
     let y_range = [dimensions.height, 0.0];
     let y_axis = AxisOptions {
         position: Position::LEFT,
+        label_offset: 83.0,
         label: "cumulative length".to_string(),
         height: dimensions.width + dimensions.padding[1] + dimensions.padding[3],
         padding: [dimensions.padding[2], dimensions.padding[0]],
         scale: Scale::LINEAR,
         domain: y_domain,
         range: y_range,
-        rotate: false,
+        rotate: true,
         ..Default::default()
     };
     let mut lines = vec![];
@@ -134,12 +136,7 @@ pub fn plot(dimensions: Dimensions, line_data: LineData, _options: &cli::PlotOpt
             ..Default::default()
         },
         line_data: Some(line_data.clone()),
-        dimensions: Dimensions {
-            height: dimensions.height,
-            width: dimensions.width,
-            margin: dimensions.margin,
-            padding: dimensions.padding,
-        },
+        dimensions: dimensions.clone(),
         ..Default::default()
     };
 

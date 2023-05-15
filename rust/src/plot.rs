@@ -259,11 +259,11 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
         cat_order,
     };
 
-    let scatter_data = blob::blob_points(plot_meta, &blob_data, &meta, &options);
-
     let dimensions = BlobDimensions {
         ..Default::default()
     };
+
+    let scatter_data = blob::blob_points(plot_meta, &blob_data, &dimensions, &meta, &options);
 
     let (x_bins, x_max) = blob::bin_axis(
         &scatter_data,
@@ -324,11 +324,11 @@ pub fn plot_cumulative(meta: &blobdir::Meta, options: &cli::PlotOptions) {
         cat_order,
     };
 
-    let cumulative_lines = cumulative::cumulative_lines(&cumulative_data, &options);
-
     let dimensions = Dimensions {
         ..Default::default()
     };
+
+    let cumulative_lines = cumulative::cumulative_lines(&cumulative_data, &dimensions, &options);
 
     let document: Document = cumulative::plot(dimensions, cumulative_lines, &options);
     save_by_suffix(options, document);
