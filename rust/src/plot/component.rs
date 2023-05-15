@@ -389,22 +389,22 @@ pub fn create_tick(
         ),
         _ => Path::new(),
     };
-    let text = if axis_options.tick_labels {
-        match tick_options.status {
-            TickStatus::Major => Text::new()
-                .set("font-family", "Roboto, Open sans, sans-serif")
-                .set("font-size", tick_options.font_size)
-                .set("text-anchor", anchor)
-                .set("dominant-baseline", baseline)
-                .set("stroke", "none")
-                .set("fill", axis_options.color.clone())
-                .set(
-                    "transform",
-                    format!("translate({:?}, {:?}) rotate({:?})", x_text, y_text, angle),
-                )
-                .add(nodeText::new(label)),
-            TickStatus::Minor => Text::new(),
-        }
+    let text = if axis_options.tick_labels && !label.is_empty() {
+        // match tick_options.status {
+        Text::new()
+            .set("font-family", "Roboto, Open sans, sans-serif")
+            .set("font-size", tick_options.font_size)
+            .set("text-anchor", anchor)
+            .set("dominant-baseline", baseline)
+            .set("stroke", "none")
+            .set("fill", axis_options.color.clone())
+            .set(
+                "transform",
+                format!("translate({:?}, {:?}) rotate({:?})", x_text, y_text, angle),
+            )
+            .add(nodeText::new(label)) //,
+                                       // TickStatus::Minor => Text::new(),
+                                       // }
     } else {
         Text::new()
     };
@@ -487,10 +487,15 @@ pub fn create_axis_ticks(options: &AxisOptions, status: TickStatus) -> Vec<Tick>
                     while i <= domain[1].clone() {
                         let mut j = i * 2.0;
                         while j < i * 10.0 && j <= domain[1].clone() {
+                            let label = if j >= min_value.clone() {
+                                format_si(&j, 3)
+                            } else {
+                                String::new()
+                            };
                             if j as f64 >= min_value {
                                 ticks.push(create_tick(
                                     j,
-                                    "".to_string(),
+                                    label,
                                     &range,
                                     &options,
                                     &options.minor_ticks.as_ref().unwrap(),
@@ -1027,8 +1032,10 @@ pub fn polar_to_path_bounded(
 pub fn chart_axis(plot_axis: &AxisOptions) -> (Group, Group) {
     let mut major_tick_group = Group::new();
     let mut major_gridline_group = Group::new();
+    let mut major_tick_count = 0;
     if plot_axis.major_ticks.is_some() {
         let major_ticks = create_axis_ticks(&plot_axis, TickStatus::Major);
+        major_tick_count = major_ticks.len();
         for tick in major_ticks {
             major_tick_group = major_tick_group.add(tick.path).add(tick.label);
             major_gridline_group = major_gridline_group.add(tick.gridline);
@@ -1039,7 +1046,11 @@ pub fn chart_axis(plot_axis: &AxisOptions) -> (Group, Group) {
     if plot_axis.minor_ticks.is_some() {
         let minor_ticks = create_axis_ticks(&plot_axis, TickStatus::Minor);
         for tick in minor_ticks {
-            minor_tick_group = minor_tick_group.add(tick.path);
+            minor_tick_group = if major_tick_count < 2 {
+                minor_tick_group.add(tick.path).add(tick.label)
+            } else {
+                minor_tick_group.add(tick.path)
+            };
         }
     }
 
