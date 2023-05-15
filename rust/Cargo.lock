@@ -112,6 +112,7 @@ version = "0.3.1"
 dependencies = [
  "atty",
  "clap",
+ "clap-num",
  "colorous",
  "coord_transforms",
  "flate2",
@@ -306,6 +307,15 @@ dependencies = [
  "once_cell",
  "strsim",
  "termcolor",
+]
+
+[[package]]
+name = "clap-num"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "488557e97528174edaa2ee268b23a809e0c598213a4bbcb4f34575a46fda147e"
+dependencies = [
+ "num-traits",
 ]
 
 [[package]]

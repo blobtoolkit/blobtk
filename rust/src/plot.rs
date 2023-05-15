@@ -2,6 +2,8 @@
 //! Invoked by calling:
 //! `blobtk plot <args>`
 
+use std::borrow::BorrowMut;
+use std::cmp::max;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -103,7 +105,7 @@ pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     let id = meta.id.clone();
     let record_type = meta.record_type.clone();
 
-    let filters = blobdir::parse_filters(&options.filter);
+    let filters = blobdir::parse_filters(&options, None);
     let wanted_indices = blobdir::set_filters(filters, &meta, &options.blobdir);
 
     let gc_filtered = blobdir::apply_filter_float(&gc_values, &wanted_indices);
@@ -249,7 +251,7 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     // let id = meta.id.clone();
     // let record_type = meta.record_type.clone();
 
-    let filters = blobdir::parse_filters(&options.filter);
+    let filters = blobdir::parse_filters(&options, Some(&plot_meta));
     let wanted_indices = blobdir::set_filters(filters, &meta, &options.blobdir);
     let blob_data = BlobData {
         x: blobdir::apply_filter_float(&plot_values["x"], &wanted_indices),
@@ -265,20 +267,23 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
 
     let scatter_data = blob::blob_points(plot_meta, &blob_data, &dimensions, &meta, &options);
 
-    let (x_bins, x_max) = blob::bin_axis(
-        &scatter_data,
-        &blob_data,
-        AxisName::X,
-        &dimensions,
-        &options,
-    );
-    let (y_bins, y_max) = blob::bin_axis(
-        &scatter_data,
-        &blob_data,
-        AxisName::Y,
-        &dimensions,
-        &options,
-    );
+    let (x_bins, y_bins, max_bin) =
+        blob::bin_axes(&scatter_data, &blob_data, &dimensions, &options);
+
+    // let (x_bins, x_max) = blob::bin_axis(
+    //     &scatter_data,
+    //     &blob_data,
+    //     AxisName::X,
+    //     &dimensions,
+    //     &options,
+    // );
+    // let (y_bins, y_max) = blob::bin_axis(
+    //     &scatter_data,
+    //     &blob_data,
+    //     AxisName::Y,
+    //     &dimensions,
+    //     &options,
+    // );
     // let document: Document = blob::svg(&dimensions, &scatter_data, &x_bins, &y_bins, &options);
 
     let document: Document = blob::plot(
@@ -286,8 +291,8 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
         scatter_data,
         x_bins,
         y_bins,
-        x_max,
-        y_max,
+        max_bin,
+        max_bin,
         &options,
     );
     save_by_suffix(options, document);
@@ -315,7 +320,7 @@ pub fn plot_cumulative(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     // let id = meta.id.clone();
     // let record_type = meta.record_type.clone();
 
-    let filters = blobdir::parse_filters(&options.filter);
+    let filters = blobdir::parse_filters(&options, None);
     let wanted_indices = blobdir::set_filters(filters, &meta, &options.blobdir);
 
     let cumulative_data = CumulativeData {

@@ -1,7 +1,17 @@
+use clap::ValueEnum;
 use svg::node::element::path::Data;
 
 use super::axis::{AxisName, AxisOptions, Position};
 use super::category::Category;
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum Reducer {
+    Sum,
+    Max,
+    Min,
+    Count,
+    Mean,
+}
 
 #[derive(Clone, Debug)]
 pub struct ScatterPoint {

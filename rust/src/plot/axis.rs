@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use clap::ValueEnum;
+
 #[derive(Clone, Debug)]
 pub struct TickOptions {
     pub font_size: f64,
@@ -65,7 +67,7 @@ impl FromStr for Position {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, ValueEnum)]
 pub enum Scale {
     LINEAR,
     SQRT,

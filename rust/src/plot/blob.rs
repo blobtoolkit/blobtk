@@ -1,12 +1,13 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
+use std::option;
 use std::str::FromStr;
 
 use svg::node::element::{Group, Rectangle};
 use svg::Document;
 
-use crate::utils::{max_float, scale_floats};
+use crate::utils::{max_float, min_float, scale_floats};
 use crate::{blobdir, cli, plot};
 
 use plot::category::Category;
@@ -14,7 +15,7 @@ use plot::category::Category;
 use super::axis::{AxisName, AxisOptions, ChartAxes, Position, Scale};
 use super::chart::{Chart, Dimensions};
 use super::component::{legend, LegendEntry};
-use super::data::{Bin, HistogramData, ScatterData, ScatterPoint};
+use super::data::{Bin, HistogramData, Reducer, ScatterData, ScatterPoint};
 
 #[derive(Clone, Debug)]
 pub struct BlobData {
@@ -71,20 +72,16 @@ pub fn bin_axis(
     axis: AxisName,
     dimensions: &BlobDimensions,
     options: &cli::PlotOptions,
-) -> (Vec<HistogramData>, f64) {
+) -> (Vec<Vec<f64>>, f64) {
     let range = match axis {
         AxisName::X => scatter_data.x.range.clone(),
         AxisName::Y => scatter_data.y.range.clone(),
         AxisName::Z => scatter_data.z.range.clone(),
         _ => [0.0, 100.0],
     };
-    let width = match axis {
-        AxisName::X => dimensions.width,
-        AxisName::Y => dimensions.height,
-        _ => 100.0,
-    };
     let bin_size = (range[1] - range[0]) / options.resolution as f64;
     let mut binned = vec![vec![0.0; options.resolution]; options.cat_count];
+    let mut counts = vec![vec![0.0; options.resolution]; options.cat_count];
     let mut max_bin = 0.0;
     for point in scatter_data.points.iter() {
         let cat_index = point.cat_index;
@@ -97,16 +94,67 @@ pub fn bin_axis(
         if bin == options.resolution {
             bin -= 1;
         }
-        binned[cat_index][bin] += blob_data.z[point.data_index];
+        match options.reducer_function {
+            Reducer::Sum => binned[cat_index][bin] += blob_data.z[point.data_index],
+            Reducer::Max => {
+                binned[cat_index][bin] =
+                    max_float(binned[cat_index][bin], blob_data.z[point.data_index])
+            }
+            Reducer::Min => {
+                binned[cat_index][bin] = if binned[cat_index][bin] == 0.0 {
+                    blob_data.z[point.data_index]
+                } else {
+                    min_float(binned[cat_index][bin], blob_data.z[point.data_index])
+                }
+            }
+            Reducer::Count => binned[cat_index][bin] += 1.0,
+            Reducer::Mean => {
+                binned[cat_index][bin] += blob_data.z[point.data_index];
+                counts[cat_index][bin] += 1.0
+            }
+        };
         max_bin = max_float(max_bin, binned[cat_index][bin]);
     }
-    let bin_width = width / options.resolution as f64;
+    match options.reducer_function {
+        Reducer::Mean => {
+            max_bin = 0.0;
+            for (cat_index, bins) in binned.clone().iter().enumerate() {
+                for (bin, _) in bins.iter().enumerate() {
+                    if counts[cat_index][bin] > 0.0 {
+                        binned[cat_index][bin] /= counts[cat_index][bin];
+                        max_bin = max_float(max_bin, binned[cat_index][bin]);
+                    }
+                }
+            }
+        }
+        Reducer::Min => {
+            max_bin = 0.0;
+            for (cat_index, bins) in binned.clone().iter().enumerate() {
+                for (bin, _) in bins.iter().enumerate() {
+                    max_bin = max_float(max_bin, binned[cat_index][bin]);
+                }
+            }
+        }
+        _ => (),
+    }
+    (binned, max_bin)
+}
+
+pub fn axis_hist(
+    binned: Vec<Vec<f64>>,
+    blob_data: &BlobData,
+    dimensions: &BlobDimensions,
+    max_bin: f64,
+    axis: AxisName,
+    options: &cli::PlotOptions,
+) -> Vec<HistogramData> {
     let domain = [0.0, max_bin];
-    let range = match axis {
-        AxisName::Y => [0.0, dimensions.hist_width],
-        _ => [0.0, dimensions.hist_height],
+    let (width, range) = match axis {
+        AxisName::X => (dimensions.width, [0.0, dimensions.hist_height]),
+        _ => (dimensions.height, [0.0, dimensions.hist_width]),
     };
     let cat_order = blob_data.cat_order.clone();
+    let bin_width = width / options.resolution as f64;
     let mut histograms = vec![
         HistogramData {
             max_bin,
@@ -135,7 +183,38 @@ pub fn bin_axis(
             ..histograms[i]
         }
     }
-    (histograms, max_bin)
+    histograms
+}
+
+pub fn bin_axes(
+    scatter_data: &ScatterData,
+    blob_data: &BlobData,
+    dimensions: &BlobDimensions,
+    options: &cli::PlotOptions,
+) -> (Vec<HistogramData>, Vec<HistogramData>, f64) {
+    let (x_binned, x_max) = bin_axis(scatter_data, blob_data, AxisName::X, dimensions, options);
+    let (y_binned, y_max) = bin_axis(scatter_data, blob_data, AxisName::Y, dimensions, options);
+    let mut max_bin = max_float(x_max, y_max);
+    if options.hist_height.is_some() {
+        max_bin = max_float(max_bin, options.hist_height.unwrap() as f64)
+    }
+    let x_histograms = axis_hist(
+        x_binned,
+        blob_data,
+        dimensions,
+        max_bin,
+        AxisName::X,
+        options,
+    );
+    let y_histograms = axis_hist(
+        y_binned,
+        blob_data,
+        dimensions,
+        max_bin,
+        AxisName::Y,
+        options,
+    );
+    (x_histograms, y_histograms, max_bin)
 }
 
 pub fn blob_points(
@@ -143,12 +222,22 @@ pub fn blob_points(
     blob_data: &BlobData,
     dimensions: &BlobDimensions,
     meta: &blobdir::Meta,
-    _options: &cli::PlotOptions,
+    options: &cli::PlotOptions,
 ) -> ScatterData {
     let default_clamp = 0.1;
     let fields = meta.field_list.clone().unwrap();
     let x_meta = fields[axes["x"].as_str()].clone();
     let mut x_domain = x_meta.range.unwrap();
+    if options.x_limit.is_some() {
+        if let Some((min_value, max_value)) = options.x_limit.clone().unwrap().split_once(",") {
+            if !min_value.is_empty() {
+                x_domain[0] = min_value.parse::<f64>().unwrap();
+            }
+            if !max_value.is_empty() {
+                x_domain[1] = max_value.parse::<f64>().unwrap();
+            }
+        }
+    }
     let x_clamp = if x_meta.clamp.is_some() {
         x_domain[0] = x_meta.range.unwrap()[0];
         x_meta.clamp
@@ -167,7 +256,7 @@ pub fn blob_points(
         padding: [dimensions.padding[3], dimensions.padding[1]],
         offset: dimensions.height + dimensions.padding[0] + dimensions.padding[2],
         scale: Scale::from_str(&x_meta.scale.unwrap()).unwrap(),
-        domain: x_meta.range.unwrap(),
+        domain: x_domain,
         range: [0.0, dimensions.width],
         clamp: x_clamp,
         ..Default::default()
@@ -176,6 +265,17 @@ pub fn blob_points(
 
     let y_meta = fields[axes["y"].as_str()].clone();
     let mut y_domain = y_meta.range.unwrap();
+    if options.y_limit.is_some() {
+        if let Some((min_value, max_value)) = options.y_limit.clone().unwrap().split_once(",") {
+            if !min_value.is_empty() {
+                y_domain[0] = min_value.parse::<f64>().unwrap();
+            }
+            if !max_value.is_empty() {
+                y_domain[1] = max_value.parse::<f64>().unwrap();
+            }
+        }
+    }
+
     let y_clamp = if y_meta.clamp.is_some() {
         y_domain[0] = y_meta.range.unwrap()[0];
         y_meta.clamp
@@ -204,9 +304,9 @@ pub fn blob_points(
     let z_meta = fields[axes["z"].as_str()].clone();
     let z_axis = AxisOptions {
         label: axes["z"].clone(),
-        scale: Scale::from_str("scaleSqrt").unwrap(),
+        scale: options.scale_function.clone(),
         domain: z_meta.range.unwrap(),
-        range: [2.0, dimensions.height / 15.0],
+        range: [2.0, 2.0 + dimensions.height / 15.0 * options.scale_factor],
         ..Default::default()
     };
     let z_scaled = scale_values(&blob_data.z, &z_axis);
@@ -238,13 +338,16 @@ pub fn blob_points(
     }
 }
 
-pub fn category_legend_full(categories: Vec<Category>, _show_total: bool) -> Group {
+pub fn category_legend_full(categories: Vec<Category>, show_total: bool) -> Group {
     let mut entries = vec![];
-    for cat in categories {
+    for (i, cat) in categories.iter().enumerate() {
+        if !show_total && i == 0 {
+            continue;
+        }
         entries.push(LegendEntry {
             title: format!("{}", cat.title),
             color: cat.color.clone(),
-            subtitle: Some(cat.subtitle()),
+            subtitle: Some(cat.clone().subtitle()),
             ..Default::default()
         });
     }

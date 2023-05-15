@@ -2,7 +2,11 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
+use clap_num::number_range;
 use pyo3::pyclass;
+
+use crate::plot::axis::Scale;
+use crate::plot::data::Reducer;
 
 // fn float_range(s: &str, min: f64, max: f64) -> Result<f64, String> {
 //     debug_assert!(min <= max, "minimum of {} exceeds maximum of {}", min, max);
@@ -179,6 +183,10 @@ pub enum Palette {
     Viridis,
 }
 
+fn less_than_5(s: &str) -> Result<f64, String> {
+    Ok(number_range(&format!("{}", s.parse::<f64>().unwrap() * 10.0), 2, 50)? as f64 / 10.0)
+}
+
 /// Options to pass to `blobtk plot`
 #[derive(Parser, Debug)]
 #[pyclass]
@@ -215,19 +223,35 @@ pub struct PlotOptions {
     pub z_field: Option<String>,
     /// Category field for blob plot
     #[arg(long = "category", short = 'c')]
-    /// Category field for blob plot
-    #[arg(long = "category", short = 'c')]
     pub cat_field: Option<String>,
     /// Resolution for blob plot
     #[arg(long, default_value_t = 30)]
     pub resolution: usize,
+    /// Maximum histogram height for blob plot
+    #[arg(long = "hist-height")]
+    pub hist_height: Option<usize>,
+    /// Reducer function for blob plot
+    #[arg(long, value_enum, default_value_t = Reducer::Sum)]
+    pub reducer_function: Reducer,
+    /// Scale function for blob plot
+    #[arg(long, value_enum, default_value_t = Scale::SQRT)]
+    pub scale_function: Scale,
+    /// Scale factor for blob plot (0.2 - 5.0)
+    #[arg(long, default_value_t = 1.0, value_parser=less_than_5)]
+    pub scale_factor: f64,
+    /// X-axis limits for blob/cumulative plot (<min>,<max>)
+    #[arg(long = "x-limit")]
+    pub x_limit: Option<String>,
+    /// Y-axis limits for blob/cumulative plot (<min>,<max>)
+    #[arg(long = "y-limit")]
+    pub y_limit: Option<String>,
     /// Maximum number of categories for blob/cumulative plot
     #[arg(long = "cat-count", default_value_t = 10)]
     pub cat_count: usize,
     /// Category order for blob/cumulative plot (<cat1>,<cat2>,...)
     #[arg(long = "cat-order")]
     pub cat_order: Option<String>,
-    /// Origin for category lines
+    /// Origin for category lines in cumulative plot
     #[arg(long, value_enum)]
     pub origin: Option<Origin>,
     /// Colour palette for categories

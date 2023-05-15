@@ -358,19 +358,45 @@ pub fn parse_field_string(id: String, blobdir: &PathBuf) -> Option<Vec<String>> 
     Some(values)
 }
 
-pub fn parse_filters(filters: &Vec<String>) -> HashMap<&str, Filter> {
+pub fn parse_filters(
+    options: &cli::PlotOptions,
+    plot_meta: Option<&HashMap<String, String>>,
+) -> HashMap<String, Filter> {
+    let mut filters = options.filter.clone();
+    if plot_meta.is_some() && options.x_limit.is_some() {
+        if let Some((min_value, max_value)) = options.x_limit.clone().unwrap().split_once(",") {
+            let x_field = plot_meta.unwrap().get("x").unwrap();
+            if !min_value.is_empty() {
+                filters.push(format!("{}--Min={}", x_field, min_value))
+            }
+            if !max_value.is_empty() {
+                filters.push(format!("{}--Max={}", x_field, max_value))
+            }
+        }
+    }
+    if plot_meta.is_some() && options.y_limit.is_some() {
+        if let Some((min_value, max_value)) = options.y_limit.clone().unwrap().split_once(",") {
+            let y_field = plot_meta.unwrap().get("y").unwrap();
+            if !min_value.is_empty() {
+                filters.push(format!("{}--Min={}", y_field, min_value))
+            }
+            if !max_value.is_empty() {
+                filters.push(format!("{}--Max={}", y_field, max_value))
+            }
+        }
+    }
     let mut filter_map = HashMap::new();
-    for filter in filters {
+    for filter in filters.iter() {
         if let Some((id, parameter)) = filter.split_once("--") {
             if !filter_map.contains_key(id) {
                 filter_map.insert(
-                    id,
+                    id.to_string(),
                     Filter {
                         ..Default::default()
                     },
                 );
             };
-            let filter_params = filter_map.get_mut(&id).unwrap();
+            let filter_params = filter_map.get_mut(&id.to_string()).unwrap();
             if parameter == "Inv" {
                 filter_params.invert = true;
                 continue;
@@ -455,11 +481,11 @@ pub fn filter_int_values(values: Vec<usize>, filter: Filter, indices: Vec<usize>
     output
 }
 
-pub fn set_filters(filters: HashMap<&str, Filter>, meta: &Meta, blobdir: &PathBuf) -> Vec<usize> {
+pub fn set_filters(filters: HashMap<String, Filter>, meta: &Meta, blobdir: &PathBuf) -> Vec<usize> {
     let mut indices = vec![];
     let field_list = meta.field_list.clone().unwrap();
     for (id, filter) in filters {
-        let field_meta_option = field_list.get(id);
+        let field_meta_option = field_list.get(&id);
         match field_meta_option {
             Some(field_meta) => {
                 let field = field_meta.clone();

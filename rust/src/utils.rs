@@ -238,3 +238,11 @@ pub fn max_float<T: PartialOrd>(a: T, b: T) -> T {
         a
     }
 }
+
+pub fn min_float<T: PartialOrd>(a: T, b: T) -> T {
+    if a < b {
+        a
+    } else {
+        b
+    }
+}
