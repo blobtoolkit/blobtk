@@ -2,8 +2,6 @@
 //! Invoked by calling:
 //! `blobtk plot <args>`
 
-use std::borrow::BorrowMut;
-use std::cmp::max;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -20,7 +18,6 @@ use colorous;
 use svg::Document;
 use usvg::{fontdb, TreeParsing, TreeTextToPath};
 
-use self::axis::AxisName;
 use self::blob::BlobDimensions;
 use self::chart::Dimensions;
 

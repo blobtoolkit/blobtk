@@ -1,7 +1,6 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
-use std::option;
 use std::str::FromStr;
 
 use svg::node::element::{Group, Rectangle};
@@ -71,7 +70,6 @@ pub fn bin_axis(
     scatter_data: &ScatterData,
     blob_data: &BlobData,
     axis: AxisName,
-    dimensions: &BlobDimensions,
     options: &cli::PlotOptions,
 ) -> (Vec<Vec<f64>>, f64) {
     let range = match axis {
@@ -193,8 +191,8 @@ pub fn bin_axes(
     dimensions: &BlobDimensions,
     options: &cli::PlotOptions,
 ) -> (Vec<HistogramData>, Vec<HistogramData>, f64) {
-    let (x_binned, x_max) = bin_axis(scatter_data, blob_data, AxisName::X, dimensions, options);
-    let (y_binned, y_max) = bin_axis(scatter_data, blob_data, AxisName::Y, dimensions, options);
+    let (x_binned, x_max) = bin_axis(scatter_data, blob_data, AxisName::X, options);
+    let (y_binned, y_max) = bin_axis(scatter_data, blob_data, AxisName::Y, options);
     let mut max_bin = max_float(x_max, y_max);
     if options.hist_height.is_some() {
         max_bin = max_float(max_bin, options.hist_height.unwrap() as f64)
