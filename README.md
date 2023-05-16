@@ -98,29 +98,68 @@ Process a BlobDir and produce static plots. Called as `blobtk plot`
 Usage: blobtk plot [OPTIONS] --blobdir <BLOBDIR>
 
 Options:
-  -d, --blobdir <BLOBDIR>            Path to BlobDir directory
-  -v, --view <VIEW>                  View to plot [possible values: blob, cumulative, snail]
-  -o, --output <OUTPUT>              Output filename [default: output.svg]
+  -d, --blobdir <BLOBDIR>
+          Path to BlobDir directory
+  -v, --view <VIEW>
+          View to plot [possible values: blob, cumulative, snail]
+  -o, --output <OUTPUT>
+          Output filename [default: output.svg]
   -f, --filter <FILTER>
-  -s, --segments <SEGMENTS>          Segment count for snail plot [default: 1000]
-      --max-span <MAX_SPAN>          Max span for snail plot
-      --max-scaffold <MAX_SCAFFOLD>  max scaffold length for snail plot
-  -x, --x-field <X_FIELD>            X-axis field for blob plot
-  -y, --y-field <Y_FIELD>            Y-axis field for blob plot
-  -z, --z-field <Z_FIELD>            Z-axis field for blob plot
-  -c, --category <CAT_FIELD>         Category field for blob plot Category field for blob plot
-      --resolution <RESOLUTION>      Resolution for blob plot [default: 30]
-      --cat-count <CAT_COUNT>        Maximum number of categories for blob/cumulative plot [default: 10]
-      --cat-order <CAT_ORDER>        Category order for blob/cumulative plot (<cat1>,<cat2>,...)
-      --palette <PALETTE>            Colour palette for categories [possible values: default, inverse, viridis]
-      --color <COLOR>                Individual colours to modify palette (<index>=<hexcode>)
-  -h, --help                         Print help
+
+  -s, --segments <SEGMENTS>
+          Segment count for snail plot [default: 1000]
+      --max-span <MAX_SPAN>
+          Max span for snail plot
+      --max-scaffold <MAX_SCAFFOLD>
+          max scaffold length for snail plot
+  -x, --x-field <X_FIELD>
+          X-axis field for blob plot
+  -y, --y-field <Y_FIELD>
+          Y-axis field for blob plot
+  -z, --z-field <Z_FIELD>
+          Z-axis field for blob plot
+  -c, --category <CAT_FIELD>
+          Category field for blob plot
+      --resolution <RESOLUTION>
+          Resolution for blob plot [default: 30]
+      --hist-height <HIST_HEIGHT>
+          Maximum histogram height for blob plot
+      --reducer-function <REDUCER_FUNCTION>
+          Reducer function for blob plot [default: sum] [possible values: sum, max, min, count, mean]
+      --scale-function <SCALE_FUNCTION>
+          Scale function for blob plot [default: sqrt] [possible values: linear, sqrt, log]
+      --scale-factor <SCALE_FACTOR>
+          Scale factor for blob plot (0.2 - 5.0) [default: 1]
+      --x-limit <X_LIMIT>
+          X-axis limits for blob/cumulative plot (<min>,<max>)
+      --y-limit <Y_LIMIT>
+          Y-axis limits for blob/cumulative plot (<min>,<max>)
+      --cat-count <CAT_COUNT>
+          Maximum number of categories for blob/cumulative plot [default: 10]
+      --legend <SHOW_LEGEND>
+          Maximum number of categories for blob/cumulative plot [default: default] [possible values: default, full, compact, none]
+      --cat-order <CAT_ORDER>
+          Category order for blob/cumulative plot (<cat1>,<cat2>,...)
+      --origin <ORIGIN>
+          Origin for category lines in cumulative plot [possible values: o, x, y]
+      --palette <PALETTE>
+          Colour palette for categories [possible values: default, inverse, viridis]
+      --color <COLOR>
+          Individual colours to modify palette (<index>=<hexcode>)
+  -h, --help
+          Print help
 ```
 
 Blob plot (as png):
 
 ```
 blobtk plot -v blob -d /path/to/BlobDir -o blob_plot_filename.png
+```
+
+Cumulative plot (as png):
+
+```
+blobtk plot -v cumulative -d /path/to/BlobDir -o cumulative_plot_filename.png
 ```
 
 Snail plot (as svg):
