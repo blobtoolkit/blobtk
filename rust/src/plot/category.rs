@@ -109,8 +109,8 @@ pub fn set_cat_order(
                     color: palette[index].clone(),
                     ..Default::default()
                 });
-                index += 1;
             }
+            index += 1;
         }
     }
     for (title, _) in &sorted_cats {

@@ -546,6 +546,17 @@ pub fn apply_filter_cat(values: &Vec<(String, usize)>, indices: &Vec<usize>) -> 
     output
 }
 
+pub fn apply_filter_cat_tuple(
+    values: &Vec<(String, usize)>,
+    indices: &Vec<usize>,
+) -> Vec<(String, usize)> {
+    let mut output = vec![];
+    for i in indices {
+        output.push(values[i.clone()].clone())
+    }
+    output
+}
+
 pub fn get_plot_values(
     meta: &Meta,
     blobdir: &PathBuf,

@@ -262,12 +262,25 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
 
     let filters = blobdir::parse_filters(&options, Some(&plot_meta));
     let wanted_indices = blobdir::set_filters(filters, &meta, &options.blobdir);
+    let z = blobdir::apply_filter_float(&plot_values["z"], &wanted_indices);
+    let filtered_cat_values = blobdir::apply_filter_cat_tuple(&cat_values, &wanted_indices);
+    let (cat_order, cat_indices) = if wanted_indices.len() < plot_values["x"].len() {
+        category::set_cat_order(
+            &filtered_cat_values,
+            &z,
+            &Some(cat_order[0].members.join(",")),
+            &options.cat_count,
+            &palette,
+        )
+    } else {
+        (cat_order, cat_indices)
+    };
     let blob_data = BlobData {
         x: blobdir::apply_filter_float(&plot_values["x"], &wanted_indices),
         y: blobdir::apply_filter_float(&plot_values["y"], &wanted_indices),
-        z: blobdir::apply_filter_float(&plot_values["z"], &wanted_indices),
-        cat: blobdir::apply_filter_int(&cat_indices, &wanted_indices),
-        cat_order,
+        z,
+        cat: cat_indices,
+        cat_order: cat_order,
     };
 
     let dimensions = BlobDimensions {
