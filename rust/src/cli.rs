@@ -7,6 +7,7 @@ use pyo3::pyclass;
 
 use crate::plot::axis::Scale;
 use crate::plot::data::Reducer;
+use crate::plot::ShowLegend;
 
 // fn float_range(s: &str, min: f64, max: f64) -> Result<f64, String> {
 //     debug_assert!(min <= max, "minimum of {} exceeds maximum of {}", min, max);
@@ -248,6 +249,9 @@ pub struct PlotOptions {
     /// Maximum number of categories for blob/cumulative plot
     #[arg(long = "cat-count", default_value_t = 10)]
     pub cat_count: usize,
+    /// Maximum number of categories for blob/cumulative plot
+    #[arg(long = "legend", value_enum, default_value_t = ShowLegend::Default)]
+    pub show_legend: ShowLegend,
     /// Category order for blob/cumulative plot (<cat1>,<cat2>,...)
     #[arg(long = "cat-order")]
     pub cat_order: Option<String>,

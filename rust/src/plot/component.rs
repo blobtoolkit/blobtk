@@ -50,6 +50,7 @@ pub enum LegendShape {
     Rect,
     Circumference,
     Radius,
+    None,
 }
 
 pub struct LegendEntry {
@@ -193,6 +194,7 @@ pub fn legend(
                         .set("x2", cell / 2)
                         .set("y2", 6),
                 ),
+            LegendShape::None => Group::new(),
         };
         let entry_group = Group::new()
             .set(

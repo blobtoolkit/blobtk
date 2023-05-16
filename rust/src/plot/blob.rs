@@ -14,8 +14,9 @@ use plot::category::Category;
 
 use super::axis::{AxisName, AxisOptions, ChartAxes, Position, Scale};
 use super::chart::{Chart, Dimensions};
-use super::component::{legend, LegendEntry};
+use super::component::{legend, LegendEntry, LegendShape};
 use super::data::{Bin, HistogramData, Reducer, ScatterData, ScatterPoint};
+use super::ShowLegend;
 
 #[derive(Clone, Debug)]
 pub struct BlobData {
@@ -338,20 +339,36 @@ pub fn blob_points(
     }
 }
 
-pub fn category_legend_full(categories: Vec<Category>, show_total: bool) -> Group {
+pub fn category_legend_full(categories: Vec<Category>, show_legend: ShowLegend) -> Group {
     let mut entries = vec![];
+    let title = "".to_string();
+    match show_legend {
+        ShowLegend::Full => entries.push(LegendEntry {
+            subtitle: Some("[count; span; n50]".to_string()),
+            shape: LegendShape::None,
+            ..Default::default()
+        }),
+        _ => (),
+    };
     for (i, cat) in categories.iter().enumerate() {
-        if !show_total && i == 0 {
-            continue;
+        if i == 0 {
+            match show_legend {
+                ShowLegend::Full => (),
+                _ => continue,
+            };
         }
+        let subtitle = match show_legend {
+            ShowLegend::Compact => None,
+            ShowLegend::Default | ShowLegend::Full => Some(cat.clone().subtitle()),
+            ShowLegend::None => return legend(title, entries, None, 1),
+        };
         entries.push(LegendEntry {
             title: format!("{}", cat.title),
             color: cat.color.clone(),
-            subtitle: Some(cat.clone().subtitle()),
+            subtitle,
             ..Default::default()
         });
     }
-    let title = "".to_string();
     legend(title, entries, None, 1)
 }
 
@@ -362,7 +379,7 @@ pub fn plot(
     hist_data_y: Vec<HistogramData>,
     x_max: f64,
     y_max: f64,
-    _options: &cli::PlotOptions,
+    options: &cli::PlotOptions,
 ) -> Document {
     let height = blob_dimensions.height
         + blob_dimensions.hist_height
@@ -520,6 +537,11 @@ pub fn plot(
         ..Default::default()
     };
 
+    let legend_x = match options.show_legend {
+        ShowLegend::Compact => width - blob_dimensions.hist_width,
+        _ => width - 185.0,
+    };
+
     let document = Document::new()
         .set("viewBox", (0, 0, width, height))
         .add(
@@ -555,10 +577,10 @@ pub fn plot(
                 blob_dimensions.hist_height + blob_dimensions.margin[0]
             ),
         ))
-        .add(category_legend_full(scatter_data.categories, false).set(
-            "transform",
-            format!("translate({}, {})", width - 185.0, 10.0),
-        ));
+        .add(
+            category_legend_full(scatter_data.categories, options.show_legend.clone())
+                .set("transform", format!("translate({}, {})", legend_x, 10.0)),
+        );
 
     document
 }

@@ -11,6 +11,7 @@ use super::axis::{AxisOptions, ChartAxes, Position, Scale};
 use super::blob::category_legend_full;
 use super::chart::{Chart, Dimensions};
 use super::data::{Line, LineData};
+use super::ShowLegend;
 
 #[derive(Clone, Debug)]
 pub struct CumulativeData {
@@ -114,7 +115,7 @@ pub fn cumulative_lines(
     }
 }
 
-pub fn plot(dimensions: Dimensions, line_data: LineData, _options: &cli::PlotOptions) -> Document {
+pub fn plot(dimensions: Dimensions, line_data: LineData, options: &cli::PlotOptions) -> Document {
     let height = dimensions.height
         + dimensions.margin[0]
         + dimensions.margin[2]
@@ -140,6 +141,11 @@ pub fn plot(dimensions: Dimensions, line_data: LineData, _options: &cli::PlotOpt
         ..Default::default()
     };
 
+    let legend_x = match options.show_legend {
+        ShowLegend::Compact => width - 240.0,
+        _ => width - 185.0,
+    };
+
     let document = Document::new()
         .set("viewBox", (0, 0, width, height))
         .add(
@@ -157,11 +163,11 @@ pub fn plot(dimensions: Dimensions, line_data: LineData, _options: &cli::PlotOpt
             ),
         ))
         .add(
-            category_legend_full(line_data.categories.clone(), true).set(
+            category_legend_full(line_data.categories.clone(), options.show_legend.clone()).set(
                 "transform",
                 format!(
                     "translate({}, {})",
-                    width - 185.0,
+                    legend_x,
                     height
                         - dimensions.margin[2]
                         - dimensions.padding[2] * 2.0

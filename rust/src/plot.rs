@@ -14,6 +14,7 @@ use crate::plot::blob::BlobData;
 use crate::plot::cumulative::CumulativeData;
 // use crate::io;
 
+use clap::ValueEnum;
 pub use cli::PlotOptions;
 use colorous;
 use svg::Document;
@@ -90,6 +91,14 @@ impl FromStr for Suffix {
             _ => Err(()),
         }
     }
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum ShowLegend {
+    Default,
+    Full,
+    Compact,
+    None,
 }
 
 pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
