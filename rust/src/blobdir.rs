@@ -32,7 +32,7 @@ pub struct AssemblyMeta {
     pub accession: String,
     #[serde(default = "default_level")]
     pub level: String,
-    pub prefix: String,
+    pub prefix: Option<String>,
     pub alias: Option<String>,
     pub bioproject: Option<String>,
     pub biosample: Option<String>,
@@ -92,14 +92,22 @@ pub struct TaxonMeta {
     pub order: Option<String>,
     pub phylum: Option<String>,
     pub superkingdom: Option<String>,
-    #[serde(deserialize_with = "deserialize_string_from_number")]
+    #[serde(
+        default = "default_taxid",
+        deserialize_with = "deserialize_string_from_number"
+    )]
     pub taxid: String,
+}
+
+fn default_taxid() -> String {
+    "0".to_string()
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Meta {
     pub id: String,
     pub name: String,
+    #[serde(default = "default_level")]
     pub record_type: String,
     pub records: usize,
     #[serde(default = "default_revision")]
