@@ -10,7 +10,7 @@ FROM debian:bullseye-slim
 #     && apt-get install -y ttf-mscorefonts-installer \
 #     && rm -rf /var/lib/apt/lists/*
 RUN apt-get update \
-    && apt-get install -y curl fontconfig unzip \
+    && apt-get install -y curl fontconfig procps unzip \
     && rm -rf /var/lib/apt/lists/*
 RUN curl -Ls "https://gwfh.mranftl.com/api/fonts/roboto?download=zip&subsets=latin&variants=700,regular,italic,700italic" > roboto.zip \
     && unzip roboto.zip \
