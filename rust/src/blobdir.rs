@@ -74,7 +74,7 @@ pub struct FieldMeta {
     pub odb_set: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct PlotMeta {
     pub x: Option<String>,
     pub y: Option<String>,
@@ -121,6 +121,7 @@ pub struct Meta {
     pub version: u8,
     pub assembly: AssemblyMeta,
     pub fields: Vec<FieldMeta>,
+    #[serde(default = "default_plotmeta")]
     pub plot: PlotMeta,
     pub taxon: TaxonMeta,
     pub field_list: Option<HashMap<String, FieldMeta>>,
@@ -133,6 +134,12 @@ fn default_revision() -> u8 {
 
 fn default_version() -> u8 {
     1
+}
+
+fn default_plotmeta() -> PlotMeta {
+    PlotMeta {
+        ..Default::default()
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -214,9 +221,26 @@ pub struct Keys {
 /// assert_eq!(meta.taxon.name, "unnamed".to_string());
 /// ```
 
-pub fn parse_blobdir(blobdir: &PathBuf) -> Result<Meta, anyhow::Error> {
-    let reader = file_reader(blobdir, "meta.json").unwrap();
-    let mut meta: Meta = serde_json::from_reader(reader).expect("unable to parse json");
+pub fn parse_blobdir(blobdir: &PathBuf) -> Result<Meta, error::Error> {
+    let reader = match file_reader(blobdir, "meta.json") {
+        Some(r) => r,
+        None => {
+            return Err(error::Error::FileNotFound(format!(
+                "{}/meta.json",
+                &blobdir.to_str().unwrap()
+            )))
+        }
+    };
+    let mut meta: Meta = match serde_json::from_reader(reader) {
+        Ok(meta) => meta,
+        Err(err) => {
+            return Err(error::Error::SerdeError(format!(
+                "{}/meta.json {}",
+                &blobdir.to_str().unwrap(),
+                err.to_string()
+            )))
+        }
+    };
     let mut fields: HashMap<String, FieldMeta> = HashMap::new();
     let mut busco_fields: Vec<(String, usize, String)> = vec![];
     fn list_fields(
