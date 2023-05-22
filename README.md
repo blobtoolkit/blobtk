@@ -1,4 +1,4 @@
-# BlobTk (v0.3.3)
+# BlobTk (v0.3.4)
 
 ## About
 
@@ -13,14 +13,14 @@ The command line tool is available as a linux/macos binary from the latest relea
 linux:
 
 ```
-curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.3.3/blobtk-linux" > blobtk &&
+curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.3.4/blobtk-linux" > blobtk &&
 chmod 755 blobtk
 ```
 
 macos:
 
 ```
-curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.3.3/blobtk-macos" > blobtk &&
+curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.3.4/blobtk-macos" > blobtk &&
 chmod 755 blobtk
 ```
 
