@@ -6,8 +6,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use anyhow;
+
 use crate::blobdir;
 use crate::cli;
+use crate::error;
 use crate::plot::blob::BlobData;
 use crate::plot::cumulative::CumulativeData;
 // use crate::io;
@@ -90,20 +93,36 @@ impl FromStr for Suffix {
     }
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, Default)]
 pub enum ShowLegend {
+    #[default]
     Default,
     Full,
     Compact,
     None,
 }
 
-pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
-    // let busco_list = meta.busco_list.clone().unwrap();
-    let busco_field = meta.busco_list.clone().unwrap()[0].clone();
-    let busco_values = blobdir::parse_field_busco(busco_field.0, &options.blobdir).unwrap();
-    let busco_total = busco_field.1;
-    let busco_lineage = busco_field.2;
+/// Make a snail plot
+///
+/// # Examples
+///
+/// ```
+/// # use crate::blobtk::plot::plot_snail;
+/// use std::path::PathBuf;
+/// use crate::blobtk::cli::PlotOptions;
+/// use crate::blobtk::cli::View;
+/// use crate::blobtk::blobdir::parse_blobdir;
+/// let options = PlotOptions {
+///     blobdir: PathBuf::from("test/minimal"),
+///     output: "test/output/test.png".to_string(),
+///     segments: 1000,
+///     view: View::Snail, ..Default::default()
+/// };
+/// let meta = parse_blobdir(&options.blobdir).unwrap();
+/// plot_snail(&meta, &options);
+/// ```
+
+pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
     let gc_values = blobdir::parse_field_float("gc".to_string(), &options.blobdir).unwrap();
     let length_values = blobdir::parse_field_int("length".to_string(), &options.blobdir).unwrap();
     let n_values = blobdir::parse_field_float("n".to_string(), &options.blobdir);
@@ -121,7 +140,18 @@ pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     };
     let length_filtered = blobdir::apply_filter_int(&length_values, &wanted_indices);
     let ncount_filtered = blobdir::apply_filter_int(&ncount_values, &wanted_indices);
-    let busco_filtered = blobdir::apply_filter_busco(&busco_values, &wanted_indices);
+    let busco_list = meta.busco_list.clone();
+    let (busco_total, busco_lineage, busco_filtered) = match busco_list {
+        Some(list) if !list.is_empty() => {
+            let busco_field = list[0].clone();
+            let busco_values = blobdir::parse_field_busco(busco_field.0, &options.blobdir).unwrap();
+            let busco_total = busco_field.1;
+            let busco_lineage = busco_field.2;
+            let busco_filtered = blobdir::apply_filter_busco(&busco_values, &wanted_indices);
+            (Some(busco_total), Some(busco_lineage), busco_filtered)
+        }
+        _ => (None, None, vec![]),
+    };
 
     let snail_stats = snail::snail_stats(
         &length_filtered,
@@ -137,6 +167,7 @@ pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) {
     );
     let document: Document = snail::svg(&snail_stats, &options);
     save_by_suffix(options, document);
+    Ok(())
 }
 
 fn save_by_suffix(options: &PlotOptions, document: Document) {
@@ -218,30 +249,55 @@ pub fn set_palette(
     color_list
 }
 
-pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
-    // let busco_list = meta.busco_list.clone().unwrap();
+fn insert_hashmap_option(
+    hash: &mut HashMap<String, String>,
+    tag: String,
+    primary: Option<String>,
+    secondary: Option<String>,
+    tertiary: Option<String>,
+) -> Result<(), error::Error> {
+    if primary.is_some() {
+        hash.insert(tag, primary.unwrap());
+    } else if secondary.is_some() {
+        hash.insert(tag, secondary.unwrap());
+    } else if tertiary.is_some() {
+        hash.insert(tag, tertiary.unwrap());
+    } else {
+        return Err(error::Error::AxisNotDefined(tag));
+    }
+    Ok(())
+}
+
+pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
     let mut plot_meta: HashMap<String, String> = HashMap::new();
-    if options.x_field.is_some() {
-        plot_meta.insert("x".to_string(), options.x_field.clone().unwrap());
-    } else {
-        plot_meta.insert("x".to_string(), meta.plot.x.clone().unwrap());
-    }
-    if options.y_field.is_some() {
-        plot_meta.insert("y".to_string(), options.y_field.clone().unwrap());
-    } else {
-        plot_meta.insert("y".to_string(), meta.plot.y.clone().unwrap());
-    }
-    if options.z_field.is_some() {
-        plot_meta.insert("z".to_string(), options.z_field.clone().unwrap());
-    } else {
-        plot_meta.insert("z".to_string(), meta.plot.z.clone().unwrap());
-    }
-    if options.cat_field.is_some() {
-        plot_meta.insert("cat".to_string(), options.cat_field.clone().unwrap());
-    } else {
-        plot_meta.insert("cat".to_string(), meta.plot.cat.clone().unwrap());
-    }
-    // TODO: handle empty values
+    insert_hashmap_option(
+        &mut plot_meta,
+        "x".to_string(),
+        options.x_field.clone(),
+        meta.plot.x.clone(),
+        None,
+    )?;
+    insert_hashmap_option(
+        &mut plot_meta,
+        "y".to_string(),
+        options.y_field.clone(),
+        meta.plot.y.clone(),
+        None,
+    )?;
+    insert_hashmap_option(
+        &mut plot_meta,
+        "z".to_string(),
+        options.z_field.clone(),
+        meta.plot.z.clone(),
+        None,
+    )?;
+    insert_hashmap_option(
+        &mut plot_meta,
+        "cat".to_string(),
+        options.cat_field.clone(),
+        meta.plot.cat.clone(),
+        Some("_".to_string()),
+    )?;
 
     let (plot_values, cat_values) = blobdir::get_plot_values(&meta, &options.blobdir, &plot_meta);
 
@@ -315,16 +371,23 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) {
         &options,
     );
     save_by_suffix(options, document);
+    Ok(())
 }
 
-pub fn plot_cumulative(meta: &blobdir::Meta, options: &cli::PlotOptions) {
+pub fn plot_cumulative(
+    meta: &blobdir::Meta,
+    options: &cli::PlotOptions,
+) -> Result<(), anyhow::Error> {
     let mut plot_meta: HashMap<String, String> = HashMap::new();
     plot_meta.insert("z".to_string(), "length".to_string());
-    if options.cat_field.is_some() {
-        plot_meta.insert("cat".to_string(), options.cat_field.clone().unwrap());
-    } else {
-        plot_meta.insert("cat".to_string(), meta.plot.cat.clone().unwrap());
-    }
+
+    insert_hashmap_option(
+        &mut plot_meta,
+        "cat".to_string(),
+        options.cat_field.clone(),
+        meta.plot.cat.clone(),
+        Some("_".to_string()),
+    )?;
     let (plot_values, cat_values) = blobdir::get_plot_values(&meta, &options.blobdir, &plot_meta);
 
     let palette = set_palette(&options.palette, &options.color, options.cat_count);
@@ -356,17 +419,17 @@ pub fn plot_cumulative(meta: &blobdir::Meta, options: &cli::PlotOptions) {
 
     let document: Document = cumulative::plot(dimensions, cumulative_lines, &options);
     save_by_suffix(options, document);
+    Ok(())
 }
 
 /// Execute the `plot` subcommand from `blobtk`.
-pub fn plot(options: &cli::PlotOptions) -> Result<(), Box<dyn std::error::Error>> {
-    let meta = blobdir::parse_blobdir(&options.blobdir);
+pub fn plot(options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
+    let meta = blobdir::parse_blobdir(&options.blobdir)?;
     let view = &options.view;
     match view {
-        Some(cli::View::Blob) => plot_blob(&meta, &options),
-        Some(cli::View::Cumulative) => plot_cumulative(&meta, &options),
-        Some(cli::View::Snail) => plot_snail(&meta, &options),
-        _ => (),
+        cli::View::Blob => plot_blob(&meta, &options)?,
+        cli::View::Cumulative => plot_cumulative(&meta, &options)?,
+        cli::View::Snail => plot_snail(&meta, &options)?,
     }
     Ok(())
 }

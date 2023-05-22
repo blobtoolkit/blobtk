@@ -248,6 +248,14 @@ pub fn blob_points(
     } else {
         None
     };
+    if x_domain[0] == x_domain[1] {
+        if x_domain[0] == 0.0 {
+            x_domain[1] += 0.1;
+        } else {
+            x_domain[0] /= 0.1;
+            x_domain[1] *= 0.1;
+        }
+    }
     let x_axis = AxisOptions {
         position: Position::BOTTOM,
         height: dimensions.height + dimensions.padding[0] + dimensions.padding[2],
@@ -286,6 +294,15 @@ pub fn blob_points(
     } else {
         None
     };
+
+    if y_domain[0] == y_domain[1] {
+        if y_domain[0] == 0.0 {
+            y_domain[1] += 0.1;
+        } else {
+            y_domain[0] /= 2.0;
+            y_domain[1] *= 2.0;
+        }
+    }
     let y_axis = AxisOptions {
         position: Position::LEFT,
         height: dimensions.width + dimensions.padding[1] + dimensions.padding[3],
@@ -301,10 +318,19 @@ pub fn blob_points(
     let y_scaled = scale_values(&blob_data.y, &y_axis);
 
     let z_meta = fields[axes["z"].as_str()].clone();
+    let mut z_domain = z_meta.range.unwrap().clone();
+    if z_domain[0] == z_domain[1] {
+        if z_domain[0] == 0.0 {
+            z_domain[1] += 0.1;
+        } else {
+            z_domain[0] /= 2.0;
+            z_domain[1] *= 2.0;
+        }
+    }
     let z_axis = AxisOptions {
         label: axes["z"].clone(),
         scale: options.scale_function.clone(),
-        domain: z_meta.range.unwrap(),
+        domain: z_domain,
         range: [2.0, 2.0 + dimensions.height / 15.0 * options.scale_factor],
         ..Default::default()
     };

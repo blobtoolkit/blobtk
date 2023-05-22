@@ -13,6 +13,9 @@ pub mod cli;
 /// Summarise windowed coverage depth.
 pub mod depth;
 
+/// Error handline.
+pub mod error;
+
 /// Functions for processing FASTA files.
 pub mod fasta;
 

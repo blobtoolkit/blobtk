@@ -4,8 +4,9 @@ use svg::node::element::path::Data;
 use super::axis::{AxisName, AxisOptions, Position};
 use super::category::Category;
 
-#[derive(Clone, Debug, ValueEnum)]
+#[derive(Clone, Debug, Default, ValueEnum)]
 pub enum Reducer {
+    #[default]
     Sum,
     Max,
     Min,

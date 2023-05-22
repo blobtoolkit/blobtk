@@ -1,3 +1,4 @@
+use std::cmp::max;
 use std::f64::consts::PI;
 
 use coord_transforms::d2::polar2cartesian;
@@ -479,7 +480,7 @@ pub fn create_axis_ticks(options: &AxisOptions, status: TickStatus) -> Vec<Tick>
                     }
                 }
                 TickStatus::Minor => {
-                    let mut i = 10u32.pow((power.abs() - 1) as u32) as f64;
+                    let mut i = 10u32.pow((max(0, power.abs() - 1)) as u32) as f64;
                     if power < 0 {
                         i = 1.0 / i;
                     }
@@ -607,7 +608,7 @@ pub fn set_axis_ticks(
             }
         }
         TickStatus::Minor => {
-            let mut i = 10u32.pow((power.abs() - 1) as u32) as f64;
+            let mut i = 10u32.pow((max(0, power.abs() - 1)) as u32) as f64;
             if power < 0 {
                 i = 1.0 / i;
             }

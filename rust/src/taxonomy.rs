@@ -4,6 +4,8 @@
 
 use std::collections::HashMap;
 
+use anyhow;
+
 use serde;
 use serde::{de::Error, Deserialize, Deserializer};
 
@@ -100,7 +102,7 @@ impl<'de> Deserialize<'de> for Node {
 }
 
 /// Execute the `taxonomy` subcommand from `blobtk`.
-pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), Box<dyn std::error::Error>> {
+pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), anyhow::Error> {
     let nodes_file = match options.taxdump.clone() {
         Some(mut d) => {
             d.push("nodes.dmp");

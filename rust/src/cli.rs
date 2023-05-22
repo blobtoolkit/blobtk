@@ -163,8 +163,9 @@ pub struct FilterOptions {
     pub read_list: Option<PathBuf>,
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, Default)]
 pub enum View {
+    #[default]
     Blob,
     Cumulative,
     Snail,
@@ -189,7 +190,7 @@ fn less_than_5(s: &str) -> Result<f64, String> {
 }
 
 /// Options to pass to `blobtk plot`
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default)]
 #[pyclass]
 pub struct PlotOptions {
     /// Path to BlobDir directory
@@ -198,7 +199,7 @@ pub struct PlotOptions {
     /// View to plot
     #[arg(long, short = 'v')]
     #[clap(value_enum)]
-    pub view: Option<View>,
+    pub view: View,
     /// Output filename
     #[arg(long, short = 'o', default_value_t = String::from("output.svg"))]
     pub output: String,

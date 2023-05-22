@@ -84,6 +84,7 @@ pub struct PlotMeta {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TaxonMeta {
+    #[serde(default = "default_taxname")]
     pub name: String,
     pub class: Option<String>,
     pub family: Option<String>,
@@ -97,6 +98,10 @@ pub struct TaxonMeta {
         deserialize_with = "deserialize_string_from_number"
     )]
     pub taxid: String,
+}
+
+fn default_taxname() -> String {
+    "unnamed".to_string()
 }
 
 fn default_taxid() -> String {
@@ -198,7 +203,18 @@ pub struct Keys {
     pub headers: String,
 }
 
-pub fn parse_blobdir(blobdir: &PathBuf) -> Meta {
+/// Parse a blobdir
+///
+/// # Examples
+///
+/// ```
+/// use std::path::PathBuf;
+/// # use crate::blobtk::blobdir::parse_blobdir;
+/// let meta = parse_blobdir(&PathBuf::from("test/minimal")).unwrap();
+/// assert_eq!(meta.taxon.name, "unnamed".to_string());
+/// ```
+
+pub fn parse_blobdir(blobdir: &PathBuf) -> Result<Meta, anyhow::Error> {
     let reader = file_reader(blobdir, "meta.json").unwrap();
     let mut meta: Meta = serde_json::from_reader(reader).expect("unable to parse json");
     let mut fields: HashMap<String, FieldMeta> = HashMap::new();
@@ -296,7 +312,7 @@ pub fn parse_blobdir(blobdir: &PathBuf) -> Meta {
         };
     }
 
-    meta
+    Ok(meta)
 }
 
 pub fn parse_field_busco(id: String, blobdir: &PathBuf) -> Option<Vec<Vec<BuscoGene>>> {
@@ -600,7 +616,13 @@ pub fn get_plot_values(
                     None => (),
                 }
             }
-            None => (),
+            None => {
+                if axis == "cat" && id == "_" {
+                    cat_values = vec![("blank".to_string(), 0); meta.records]
+                } else {
+                    ()
+                }
+            }
         };
     }
     (plot_values, cat_values)

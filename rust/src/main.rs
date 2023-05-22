@@ -1,20 +1,21 @@
 use std::process;
 
+use anyhow;
+
 use blobtk::cli;
 use blobtk::depth;
 use blobtk::filter;
 use blobtk::plot;
 use blobtk::taxonomy;
 
-use std::error::Error;
-
-fn cmd(args: cli::Arguments) -> Result<(), Box<dyn Error>> {
+fn cmd(args: cli::Arguments) -> Result<(), anyhow::Error> {
     match args.cmd {
-        cli::SubCommand::Filter(options) => filter::filter(&options),
-        cli::SubCommand::Depth(options) => depth::depth(&options),
-        cli::SubCommand::Plot(options) => plot::plot(&options),
-        cli::SubCommand::Taxonomy(options) => taxonomy::taxonomy(&options),
+        cli::SubCommand::Filter(options) => filter::filter(&options)?,
+        cli::SubCommand::Depth(options) => depth::depth(&options)?,
+        cli::SubCommand::Plot(options) => plot::plot(&options)?,
+        cli::SubCommand::Taxonomy(options) => taxonomy::taxonomy(&options)?,
     }
+    Ok(())
 }
 fn main() {
     let args = cli::parse();

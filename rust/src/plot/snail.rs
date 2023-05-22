@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::cmp::{self, Ordering};
 use std::collections::HashSet;
 use std::f64::consts::PI;
 
@@ -147,8 +147,8 @@ pub fn snail_stats(
     n_vals: &Option<Vec<f64>>,
     ncount_values: &Vec<usize>,
     busco_values: &Vec<Vec<blobdir::BuscoGene>>,
-    busco_total: usize,
-    busco_lineage: String,
+    busco_total: Option<usize>,
+    busco_lineage: Option<String>,
     id: String,
     record_type: String,
     options: &cli::PlotOptions,
@@ -156,6 +156,14 @@ pub fn snail_stats(
     let span = length_values.iter().sum();
     let n = ncount_values.iter().sum();
     let mut new_vals = vec![];
+    let busco_total = match busco_total {
+        Some(total) => total,
+        None => 0,
+    };
+    let busco_lineage = match busco_lineage {
+        Some(lineage) => lineage,
+        None => "".to_string(),
+    };
     let n_values = match n_vals {
         Some(vals) => vals,
         None => {
@@ -182,12 +190,14 @@ pub fn snail_stats(
     let mut at_span = (1.0 - gc_values[order[scaffold_index]])
         * ((length_values[order[scaffold_index]] - ncount_values[order[scaffold_index]]) as f64);
     let mut n_span = ncount_values[order[scaffold_index]];
-    count_buscos(
-        &busco_values[order[scaffold_index]],
-        &mut busco_frag,
-        &mut busco_list,
-        &mut busco_dup,
-    );
+    if !busco_values.is_empty() {
+        count_buscos(
+            &busco_values[order[scaffold_index]],
+            &mut busco_frag,
+            &mut busco_list,
+            &mut busco_dup,
+        );
+    }
 
     let mut binned_scaffold_lengths: Vec<usize> = vec![];
     let mut binned_scaffold_counts: Vec<usize> = vec![];
@@ -208,12 +218,14 @@ pub fn snail_stats(
                 * ((length_values[order[scaffold_index]] - ncount_values[order[scaffold_index]])
                     as f64);
             n_span += ncount_values[order[scaffold_index]];
-            count_buscos(
-                &busco_values[order[scaffold_index]],
-                &mut busco_frag,
-                &mut busco_list,
-                &mut busco_dup,
-            );
+            if !busco_values.is_empty() {
+                count_buscos(
+                    &busco_values[order[scaffold_index]],
+                    &mut busco_frag,
+                    &mut busco_list,
+                    &mut busco_dup,
+                );
+            }
         }
         binned_scaffold_counts.push(scaffold_index + 1);
         binned_scaffold_lengths.push(length_values[order[scaffold_index]]);
@@ -677,7 +689,7 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
 
     for (i, tick) in major_length_ticks.iter().enumerate() {
         let tick = tick.clone();
-        let label = if i < major_length_ticks.len() - 3 {
+        let label = if i < cmp::max(major_length_ticks.len(), 3) - 3 {
             Text::new()
         } else {
             tick.label
@@ -726,10 +738,15 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
     let dataset_legend = dataset_name_legend(&snail_stats, &options)
         .set("transform", format!("translate({},{})", 5, 990));
 
-    let busc_stats_legend = busco_stats_legend(&snail_stats, &options)
-        .set("transform", format!("translate({},{})", 630, 25));
-
-    let busco_group = busco_plot(snail_stats).set("transform", "translate(910, 170)");
+    let (busc_stats_legend, busco_group) = if snail_stats.busco_total() >= 1 {
+        (
+            busco_stats_legend(&snail_stats, &options)
+                .set("transform", format!("translate({},{})", 630, 25)),
+            busco_plot(snail_stats).set("transform", "translate(910, 170)"),
+        )
+    } else {
+        (Group::new(), Group::new())
+    };
 
     let group = Group::new()
         .set("transform", "translate(500, 525)")

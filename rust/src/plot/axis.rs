@@ -67,9 +67,10 @@ impl FromStr for Position {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, ValueEnum)]
+#[derive(Clone, Debug, Default, PartialEq, ValueEnum)]
 pub enum Scale {
     LINEAR,
+    #[default]
     SQRT,
     LOG,
 }
