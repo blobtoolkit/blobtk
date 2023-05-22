@@ -103,25 +103,6 @@ pub enum ShowLegend {
 }
 
 /// Make a snail plot
-///
-/// # Examples
-///
-/// ```
-/// # use crate::blobtk::plot::plot_snail;
-/// use std::path::PathBuf;
-/// use crate::blobtk::cli::PlotOptions;
-/// use crate::blobtk::cli::View;
-/// use crate::blobtk::blobdir::parse_blobdir;
-/// let options = PlotOptions {
-///     blobdir: PathBuf::from("test/minimal"),
-///     output: "test/output/test.png".to_string(),
-///     segments: 1000,
-///     view: View::Snail, ..Default::default()
-/// };
-/// let meta = parse_blobdir(&options.blobdir).unwrap();
-/// plot_snail(&meta, &options);
-/// ```
-
 pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
     let gc_values = blobdir::parse_field_float("gc".to_string(), &options.blobdir)?;
     let length_values = blobdir::parse_field_int("length".to_string(), &options.blobdir)?;
