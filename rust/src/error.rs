@@ -9,6 +9,8 @@ pub enum Error {
     AxisNotDefined(String),
     #[error("File not found: {0}")]
     FileNotFound(String),
+    #[error("Image suffix not supported: {0}")]
+    InvalidImageSuffix(String),
 }
 
 impl From<std::io::Error> for Error {

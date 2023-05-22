@@ -123,10 +123,10 @@ pub enum ShowLegend {
 /// ```
 
 pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
-    let gc_values = blobdir::parse_field_float("gc".to_string(), &options.blobdir).unwrap();
-    let length_values = blobdir::parse_field_int("length".to_string(), &options.blobdir).unwrap();
+    let gc_values = blobdir::parse_field_float("gc".to_string(), &options.blobdir)?;
+    let length_values = blobdir::parse_field_int("length".to_string(), &options.blobdir)?;
     let n_values = blobdir::parse_field_float("n".to_string(), &options.blobdir);
-    let ncount_values = blobdir::parse_field_int("ncount".to_string(), &options.blobdir).unwrap();
+    let ncount_values = blobdir::parse_field_int("ncount".to_string(), &options.blobdir)?;
     let id = meta.id.clone();
     let record_type = meta.record_type.clone();
 
@@ -135,8 +135,8 @@ pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<()
 
     let gc_filtered = blobdir::apply_filter_float(&gc_values, &wanted_indices);
     let n_filtered = match n_values {
-        None => None,
-        Some(values) => Some(blobdir::apply_filter_float(&values, &wanted_indices)),
+        Ok(values) => Some(blobdir::apply_filter_float(&values, &wanted_indices)),
+        Err(_) => None,
     };
     let length_filtered = blobdir::apply_filter_int(&length_values, &wanted_indices);
     let ncount_filtered = blobdir::apply_filter_int(&ncount_values, &wanted_indices);
@@ -166,23 +166,25 @@ pub fn plot_snail(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<()
         &options,
     );
     let document: Document = snail::svg(&snail_stats, &options);
-    save_by_suffix(options, document);
+    save_by_suffix(options, document)?;
     Ok(())
 }
 
-fn save_by_suffix(options: &PlotOptions, document: Document) {
-    let suffix = Suffix::from_str(
-        PathBuf::from(options.output.as_str())
-            .extension()
-            .unwrap()
-            .to_str()
-            .unwrap(),
-    )
-    .unwrap();
+fn save_by_suffix(options: &PlotOptions, document: Document) -> Result<(), error::Error> {
+    let output_str = options.output.as_str();
+    let suffix_str = PathBuf::from(output_str)
+        .extension()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    let suffix = Suffix::from_str(&suffix_str);
     match suffix {
-        Suffix::PNG => save_png(&document, &options),
-        Suffix::SVG => save_svg(&document, &options),
-    }
+        Ok(Suffix::PNG) => save_png(&document, &options),
+        Ok(Suffix::SVG) => save_svg(&document, &options),
+        Err(_) => return Err(error::Error::InvalidImageSuffix(suffix_str)),
+    };
+    Ok(())
 }
 
 /// Convert a colorous::Color to 6 digit hex string
@@ -299,7 +301,7 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(),
         Some("_".to_string()),
     )?;
 
-    let (plot_values, cat_values) = blobdir::get_plot_values(&meta, &options.blobdir, &plot_meta);
+    let (plot_values, cat_values) = blobdir::get_plot_values(&meta, &options.blobdir, &plot_meta)?;
 
     let palette = set_palette(&options.palette, &options.color, options.cat_count);
 
@@ -370,7 +372,7 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(),
         max_bin,
         &options,
     );
-    save_by_suffix(options, document);
+    save_by_suffix(options, document)?;
     Ok(())
 }
 
@@ -388,7 +390,7 @@ pub fn plot_cumulative(
         meta.plot.cat.clone(),
         Some("_".to_string()),
     )?;
-    let (plot_values, cat_values) = blobdir::get_plot_values(&meta, &options.blobdir, &plot_meta);
+    let (plot_values, cat_values) = blobdir::get_plot_values(&meta, &options.blobdir, &plot_meta)?;
 
     let palette = set_palette(&options.palette, &options.color, options.cat_count);
 
@@ -418,7 +420,7 @@ pub fn plot_cumulative(
     let cumulative_lines = cumulative::cumulative_lines(&cumulative_data, &dimensions, &options);
 
     let document: Document = cumulative::plot(dimensions, cumulative_lines, &options);
-    save_by_suffix(options, document);
+    save_by_suffix(options, document)?;
     Ok(())
 }
 

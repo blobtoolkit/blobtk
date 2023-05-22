@@ -20,7 +20,7 @@ fn cmd(args: cli::Arguments) -> Result<(), anyhow::Error> {
 fn main() {
     let args = cli::parse();
     if let Err(e) = cmd(args) {
-        eprintln!("Application error: {e}");
+        eprintln!("ERROR: {e}");
         process::exit(1);
     }
 }

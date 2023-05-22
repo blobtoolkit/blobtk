@@ -14,7 +14,7 @@ use titlecase::titlecase;
 use url::Url;
 
 use crate::cli;
-// use crate::io;
+use crate::error;
 
 pub use cli::PlotOptions;
 
@@ -338,10 +338,19 @@ pub fn parse_field_busco(id: String, blobdir: &PathBuf) -> Option<Vec<Vec<BuscoG
     Some(values)
 }
 
-pub fn parse_field_cat(id: String, blobdir: &PathBuf) -> Option<Vec<(String, usize)>> {
+pub fn parse_field_cat(
+    id: String,
+    blobdir: &PathBuf,
+) -> Result<Vec<(String, usize)>, error::Error> {
     let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
-        None => return None,
+        None => {
+            return Err(error::Error::FileNotFound(format!(
+                "{}/{}.json",
+                &blobdir.to_str().unwrap(),
+                &id
+            )))
+        }
     };
     let field: Field<usize> = serde_json::from_reader(reader).expect("unable to parse json");
     let mut values: Vec<(String, usize)> = vec![];
@@ -349,37 +358,55 @@ pub fn parse_field_cat(id: String, blobdir: &PathBuf) -> Option<Vec<(String, usi
     for value in field.values() {
         values.push((keys[*value].clone(), *value))
     }
-    Some(values)
+    Ok(values)
 }
 
-pub fn parse_field_float(id: String, blobdir: &PathBuf) -> Option<Vec<f64>> {
+pub fn parse_field_float(id: String, blobdir: &PathBuf) -> Result<Vec<f64>, error::Error> {
     let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
-        None => return None,
+        None => {
+            return Err(error::Error::FileNotFound(format!(
+                "{}/{}.json",
+                &blobdir.to_str().unwrap(),
+                &id
+            )))
+        }
     };
     let field: Field<f64> = serde_json::from_reader(reader).expect("unable to parse json");
     let values = field.values().clone();
-    Some(values)
+    Ok(values)
 }
 
-pub fn parse_field_int(id: String, blobdir: &PathBuf) -> Option<Vec<usize>> {
+pub fn parse_field_int(id: String, blobdir: &PathBuf) -> Result<Vec<usize>, error::Error> {
     let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
-        None => return None,
+        None => {
+            return Err(error::Error::FileNotFound(format!(
+                "{}/{}.json",
+                &blobdir.to_str().unwrap(),
+                &id
+            )))
+        }
     };
     let field: Field<usize> = serde_json::from_reader(reader).expect("unable to parse json");
     let values = field.values().clone();
-    Some(values)
+    Ok(values)
 }
 
-pub fn parse_field_string(id: String, blobdir: &PathBuf) -> Option<Vec<String>> {
+pub fn parse_field_string(id: String, blobdir: &PathBuf) -> Result<Vec<String>, error::Error> {
     let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
-        None => return None,
+        None => {
+            return Err(error::Error::FileNotFound(format!(
+                "{}/{}.json",
+                &blobdir.to_str().unwrap(),
+                &id
+            )))
+        }
     };
     let field: Field<String> = serde_json::from_reader(reader).expect("unable to parse json");
     let values = field.values().clone();
-    Some(values)
+    Ok(values)
 }
 
 pub fn parse_filters(
@@ -585,7 +612,7 @@ pub fn get_plot_values(
     meta: &Meta,
     blobdir: &PathBuf,
     plot_map: &HashMap<String, String>,
-) -> (HashMap<String, Vec<f64>>, Vec<(String, usize)>) {
+) -> Result<(HashMap<String, Vec<f64>>, Vec<(String, usize)>), error::Error> {
     let mut plot_values = HashMap::new();
     let mut cat_values = vec![];
     let field_list = meta.field_list.clone().unwrap();
@@ -596,12 +623,11 @@ pub fn get_plot_values(
                 let field = field_meta.clone();
                 match field.datatype {
                     Some(Datatype::Float) => {
-                        let values = parse_field_float(field_meta.id.clone(), blobdir).unwrap();
+                        let values = parse_field_float(field_meta.id.clone(), blobdir)?;
                         plot_values.insert(axis.clone(), values);
                     }
                     Some(Datatype::Integer) => {
-                        let values: Vec<f64> = parse_field_int(field_meta.id.clone(), blobdir)
-                            .unwrap()
+                        let values: Vec<f64> = parse_field_int(field_meta.id.clone(), blobdir)?
                             .iter()
                             .map(|x| x.clone() as f64)
                             .collect();
@@ -609,7 +635,7 @@ pub fn get_plot_values(
                     }
                     Some(Datatype::String) => {
                         if field.data.is_some() {
-                            cat_values = parse_field_cat(field_meta.id.clone(), blobdir).unwrap();
+                            cat_values = parse_field_cat(field_meta.id.clone(), blobdir)?;
                         }
                     }
                     Some(_) => (),
@@ -625,5 +651,5 @@ pub fn get_plot_values(
             }
         };
     }
-    (plot_values, cat_values)
+    Ok((plot_values, cat_values))
 }
