@@ -107,7 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.8"] #, "3.9", "3.10", "3.11"]
         target: [x86_64]
     steps:
       - uses: actions/checkout@v3
@@ -139,8 +139,9 @@ jobs:
           pip install blobtk --no-index --find-links ./dist --force-reinstall
       - name: Rename binary
         run: |
-          ls ./rust/target/release
-          mv ./rust/target/release/blobtk* ./rust/target/release/blobtk-linux
+          ls ./rust/target/
+          ls ./rust/target/*/
+          mv ./rust/target/*/release/blobtk* ./rust/target/release/blobtk-linux
       - name: Upload binary
         uses: actions/upload-artifact@v3
         with:
