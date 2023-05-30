@@ -6,6 +6,10 @@ on:
     #   - "*"
 
 jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - run: exit 0
   # macos:
   #   runs-on: macos-latest
   #   strategy:
