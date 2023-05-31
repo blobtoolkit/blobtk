@@ -2,8 +2,8 @@ name: release-blobtk
 
 on:
   push:
-    # tags:
-    #   - "*"
+    tags:
+      - "*"
 
 env:
   RUSTFLAGS: "-C target-feature=+crt-static"
@@ -218,8 +218,7 @@ jobs:
           prerelease: false
           title: "v${{github.ref_name}}"
           files: |
-            dist/blobtk-macos
-            dist/blobtk-linux
+            dist/blobtk-*
             dist/blobtk*.tgz
 
   upload-to-pypi:
