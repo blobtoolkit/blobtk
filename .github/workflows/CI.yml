@@ -9,7 +9,7 @@ on:
   push:
     branches:
       - main
-      - feature/statically-linked-binary
+      # - feature/statically-linked-binary
     tags:
       - "*"
   pull_request:
