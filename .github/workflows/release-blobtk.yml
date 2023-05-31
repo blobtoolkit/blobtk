@@ -139,9 +139,8 @@ jobs:
           pip install blobtk --no-index --find-links ./dist --force-reinstall
       - name: Rename binary
         run: |
-          ls ./rust/target/
-          ls ./rust/target/*/
-          mv ./rust/target/*/release/blobtk* ./rust/target/release/blobtk-linux
+          ls ./rust/target/x86_64-unknown-linux-gnu/release
+          mv ./rust/target/x86_64-unknown-linux-gnu/release/blobtk* ./rust/target/release/blobtk-linux
       - name: Upload binary
         uses: actions/upload-artifact@v3
         with:
