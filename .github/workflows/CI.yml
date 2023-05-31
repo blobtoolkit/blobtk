@@ -15,9 +15,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  RUSTFLAGS: "-C target-feature=+crt-static"
-
 permissions:
   contents: read
 
@@ -68,22 +65,37 @@ jobs:
   #         name: wheels
   #         path: dist
 
-  macos:
+  macos-x86_64:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        target: [x86_64] #, aarch64]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
           python-version: "3.11"
-          architecture: x64
+          # architecture: x64
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
-          # target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter --target ${{ matrix.target }}-apple-darwin -m rust/Cargo.toml
+          args: --release --out dist --find-interpreter --target x86_64-apple-darwin -m rust/Cargo.toml
+          sccache: "true"
+      - name: Upload wheels
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: dist
+
+  macos-aarch64:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v3
+      # - uses: actions/setup-python@v4
+      #   with:
+      #     python-version: "3.11"
+      #     # architecture: x64
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          args: --release --out dist --find-interpreter --target aarch64-apple-darwin -m rust/Cargo.toml
           sccache: "true"
       - name: Upload wheels
         uses: actions/upload-artifact@v3
@@ -110,7 +122,7 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     if: "startsWith(github.ref, 'refs/tags/')"
-    needs: [linux, macos]
+    needs: [linux, macos-x86_64, macos-aarch64]
     steps:
       - uses: actions/download-artifact@v3
         with:
