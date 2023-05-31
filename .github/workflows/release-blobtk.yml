@@ -2,8 +2,8 @@ name: release-blobtk
 
 on:
   push:
-    tags:
-      - "*"
+    # tags:
+    #   - "*"
 
 # env:
 #   RUSTFLAGS: "-C target-feature=+crt-static"
