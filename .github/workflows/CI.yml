@@ -84,24 +84,24 @@ jobs:
           name: wheels
           path: dist
 
-  macos-aarch64:
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v3
-      # - uses: actions/setup-python@v4
-      #   with:
-      #     python-version: "3.11"
-      #     # architecture: x64
-      - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          args: --release --out dist --find-interpreter --target aarch64-apple-darwin -m rust/Cargo.toml
-          sccache: "true"
-      - name: Upload wheels
-        uses: actions/upload-artifact@v3
-        with:
-          name: wheels
-          path: dist
+  # macos-aarch64:
+  #   runs-on: self-hosted
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     # - uses: actions/setup-python@v4
+  #     #   with:
+  #     #     python-version: "3.11"
+  #     #     # architecture: x64
+  #     - name: Build wheels
+  #       uses: PyO3/maturin-action@v1
+  #       with:
+  #         args: --release --out dist --find-interpreter --target aarch64-apple-darwin -m rust/Cargo.toml
+  #         sccache: "true"
+  #     - name: Upload wheels
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: wheels
+  #         path: dist
 
   sdist:
     runs-on: ubuntu-latest
