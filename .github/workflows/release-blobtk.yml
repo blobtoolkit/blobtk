@@ -11,9 +11,6 @@ on:
 env:
   VERSION: 0.3.6
 
-permissions:
-  contents: read
-
 jobs:
   macos-binary:
     runs-on: macos-latest
