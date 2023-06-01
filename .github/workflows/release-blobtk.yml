@@ -8,6 +8,9 @@ on:
     tags:
       - "*"
 
+env:
+  VERSION: 0.3.5
+
 permissions:
   contents: read
 
@@ -183,7 +186,7 @@ jobs:
       - macos-wheels
       - linux-wheels
       - sdist-wheels
-    if: "startsWith(github.ref, 'refs/tags/')"
+    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v3
       - uses: actions/download-artifact@v3
@@ -205,10 +208,59 @@ jobs:
             dist/blobtk-*
             dist/blobtk*.tgz
 
+  build-and-push-docker-release:
+    runs-on: ubuntu-latest
+    needs: create-github-release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        with:
+          images: genomehubs/blobtk
+      - name: Build and push Docker image
+        uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
+        with:
+          context: ./rust
+          push: true
+          tags: genomehubs/blobtk:${{ env.VERSION }}, genomehubs/blobtk:latest
+          labels: ${{ steps.meta.outputs.labels }}
+
+  build-and-push-docker-develop:
+    runs-on: ubuntu-latest
+    needs: linux-binary
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        with:
+          images: genomehubs/blobtk
+      - name: Build and push Docker image
+        uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
+        with:
+          context: ./rust
+          push: true
+          tags: genomehubs/blobtk:develop
+          labels: ${{ steps.meta.outputs.labels }}
+
   upload-to-pypi:
     name: Upload to PyPI
     runs-on: ubuntu-latest
-    if: "startsWith(github.ref, 'refs/tags/')"
+    if: startsWith(github.ref, 'refs/tags/')
     needs:
       - create-github-release
       # - macos-wheels
@@ -232,7 +284,7 @@ jobs:
   # release:
   #   name: Release
   #   runs-on: ubuntu-latest
-  #   if: "startsWith(github.ref, 'refs/tags/')"
+  #   if: startsWith(github.ref, 'refs/tags/')
   #   needs: [linux, macos-x86_64]
   #   steps:
   #     - uses: actions/download-artifact@v3
@@ -249,7 +301,7 @@ jobs:
   publish-crate:
     name: Publish crate
     runs-on: ubuntu-latest
-    if: "startsWith(github.ref, 'refs/tags/')"
+    if: startsWith(github.ref, 'refs/tags/')
     needs: create-github-release
     steps:
       - uses: actions/checkout@v3
@@ -262,7 +314,7 @@ jobs:
   create-conda-release-macos:
     name: Create conda release Mac
     runs-on: macos-latest
-    if: "startsWith(github.ref, 'refs/tags/')"
+    if: startsWith(github.ref, 'refs/tags/')
     needs:
       - create-github-release
       # - macos-binary
@@ -304,7 +356,7 @@ jobs:
     name: Create conda release Linux
     runs-on: ubuntu-latest
     #container: quay.io/pypa/manylinux2014_x86_64
-    if: "startsWith(github.ref, 'refs/tags/')"
+    if: startsWith(github.ref, 'refs/tags/')
     needs:
       - create-github-release
       # - linux-binary
