@@ -2,20 +2,26 @@ name: release-blobtk
 
 on:
   push:
+    branches:
+      - main
+      - feature/statically-linked-binary
     tags:
       - "*"
 
+env:
+  VERSION: 0.3.5
+
+permissions:
+  contents: read
+
 jobs:
-  macos:
+  macos-binary:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.10"
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -23,30 +29,9 @@ jobs:
       - name: Build
         working-directory: ./rust
         run: cargo build --release
-      - name: Tests
-        working-directory: ./rust
-        run: cargo test --no-default-features --release
-      - name: Build wheels - x86_64
-        uses: PyO3/maturin-action@v1
-        with:
-          target: x86_64
-          args: -i python --release --out dist --sdist -m rust/Cargo.toml
-      - name: Install built wheel - x86_64
-        run: |
-          pip install blobtk --no-index --find-links ./dist --force-reinstall
-      - name: Build wheels - universal2
-        if: ${{ matrix.python-version >= '3.8' || contains(fromJson('["3.10", "3.11"]'), matrix.python-version) }}
-        uses: PyO3/maturin-action@v1
-        with:
-          args: -i python --release --universal2 --out dist -m rust/Cargo.toml
-      - name: Install built wheel - universal2
-        if: ${{ matrix.python-version >= '3.8' || contains(fromJson('["3.10", "3.11"]'), matrix.python-version) }}
-        run: |
-          pip install blobtk --no-index --find-links ./dist --force-reinstall
-      # - name: Python UnitTest
-      #   run: |
-      #     pip install -r dev-requirements.txt
-      #     make test
+      #     - name: Tests
+      #       working-directory: ./rust
+      #       run: cargo test --no-default-features --release
       - name: Rename binary
         run: |
           mv ./rust/target/release/blobtk ./rust/target/release/blobtk-macos
@@ -55,6 +40,75 @@ jobs:
         with:
           name: binaries
           path: rust/target/release/blobtk-macos
+
+  linux-binary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install static libraries for C
+        run: sudo apt-get install -y libc6-dev
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: x86_64-unknown-linux-gnu
+      - name: Build
+        working-directory: ./rust
+        # run: cargo build --target x86_64-unknown-linux-gnu --release
+        run: RUSTFLAGS="-C target-feature=+crt-static" cargo build --target x86_64-unknown-linux-gnu --release
+      # - name: Tests
+      #   working-directory: ./rust
+      #   run: cargo test --no-default-features --release
+      # - uses: actions/setup-python@v4
+      #   with:
+      #     python-version: ${{ matrix.python-version }}
+      # - name: Audit
+      #   working-directory: ./rust
+      #   run: cargo install cargo-audit && cargo audit
+      - name: Rename binary
+        run: |
+          mv ./rust/target/x86_64-unknown-linux-gnu/release/blobtk ./rust/target/release/blobtk-linux
+      - name: Upload binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: ./rust/target/release/blobtk-*
+
+  sdist-wheels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist -m rust/Cargo.toml
+      - name: Upload sdist
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: dist
+
+  linux-wheels:
+    runs-on: ubuntu-latest
+    needs:
+      - linux-binary
+      - sdist-wheels
+    # strategy:
+    #   matrix:
+    #     target: [x86_64] # , x86, aarch64, armv7, s390x, ppc64le]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          # target: ${{ matrix.target }}
+          args: --release --out dist --find-interpreter --target x86_64-unknown-linux-gnu -m rust/Cargo.toml
+          sccache: "true"
+          manylinux: auto
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
@@ -65,93 +119,74 @@ jobs:
   #   runs-on: windows-latest
   #   strategy:
   #     matrix:
-  #       python-version: ['3.7', '3.8', '3.9', '3.10', '3.11']
-  #       target: [x64, x86]
+  #       target: [x64] # , x86]
   #   steps:
   #     - uses: actions/checkout@v3
   #     - uses: actions/setup-python@v4
   #       with:
-  #         python-version: ${{ matrix.python-version }}
+  #         python-version: "3.10"
   #         architecture: ${{ matrix.target }}
-  #     - name: Install Rust toolchain
-  #       uses: dtolnay/rust-toolchain@stable
-  #     - name: Build
-  #       if: matrix.target == 'x64'
-  #       run: cargo build --release
-  #     - name: Tests
-  #       if: matrix.target == 'x64'
-  #       run: cargo test --no-default-features --release
   #     - name: Build wheels
   #       uses: PyO3/maturin-action@v1
   #       with:
   #         target: ${{ matrix.target }}
-  #         args: -i python --release --out dist
-  #     - name: Install built wheel
-  #       run: |
-  #         pip install cramjam --no-index --find-links dist --force-reinstall
-  #     - name: Python UnitTest
-  #       run: |
-  #         pip install -r dev-requirements.txt
-  #         make test
+  #         args: --release --out dist --find-interpreter -m rust/Cargo.toml
+  #         sccache: "true"
   #     - name: Upload wheels
   #       uses: actions/upload-artifact@v3
   #       with:
   #         name: wheels
   #         path: dist
 
-  linux:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
-        target: [x86_64]
+  macos-wheels:
+    runs-on: macos-latest
+    needs:
+      - macos-binary
+      - sdist-wheels
     steps:
       - uses: actions/checkout@v3
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - name: Build
-        working-directory: ./rust
-        run: cargo build --release
-      - name: Tests
-        working-directory: ./rust
-        run: cargo test --no-default-features --release
       - uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Audit
-        working-directory: ./rust
-        run: cargo install cargo-audit && cargo audit
-      - name: Build Wheels
+          python-version: "3.11"
+          # architecture: x64
+      - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
-          target: ${{ matrix.target }}
-          manylinux: auto
-          args: -i ${{ matrix.python-version }} --release --out dist -m rust/Cargo.toml
-      - name: Python UnitTest
-        if: matrix.target == 'x86_64'
-        run: |
-          pip install blobtk --no-index --find-links ./dist --force-reinstall
-      - name: Rename binary
-        run: |
-          mv ./rust/target/release/blobtk ./rust/target/release/blobtk-linux
-      - name: Upload binary
-        uses: actions/upload-artifact@v3
-        with:
-          name: binaries
-          path: rust/target/release/blobtk-linux
+          args: --release --out dist --find-interpreter --target x86_64-apple-darwin -m rust/Cargo.toml
+          sccache: "true"
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
           name: wheels
           path: dist
 
+  # macos-aarch64:
+  #   runs-on: self-hosted
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     # - uses: actions/setup-python@v4
+  #     #   with:
+  #     #     python-version: "3.11"
+  #     #     # architecture: x64
+  #     - name: Build wheels
+  #       uses: PyO3/maturin-action@v1
+  #       with:
+  #         args: --release --out dist --find-interpreter --target aarch64-apple-darwin -m rust/Cargo.toml
+  #         sccache: "true"
+  #     - name: Upload wheels
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: wheels
+  #         path: dist
+
   create-github-release:
     name: Create GitHub release
     runs-on: ubuntu-latest
     needs:
-      - macos
-      - linux
-    if: "startsWith(github.ref, 'refs/tags/')"
+      - macos-wheels
+      - linux-wheels
+      - sdist-wheels
+    if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v3
       - uses: actions/download-artifact@v3
@@ -170,15 +205,67 @@ jobs:
           prerelease: false
           title: "v${{github.ref_name}}"
           files: |
-            dist/blobtk-macos
-            dist/blobtk-linux
+            dist/blobtk-*
             dist/blobtk*.tgz
+
+  build-and-push-docker-release:
+    runs-on: ubuntu-latest
+    needs: create-github-release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        with:
+          images: genomehubs/blobtk
+      - name: Build and push Docker image
+        uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
+        with:
+          context: ./rust
+          push: true
+          tags: genomehubs/blobtk:${{ env.VERSION }}, genomehubs/blobtk:latest
+          labels: ${{ steps.meta.outputs.labels }}
+
+  build-and-push-docker-develop:
+    runs-on: ubuntu-latest
+    needs: linux-binary
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        with:
+          images: genomehubs/blobtk
+      - name: Build and push Docker image
+        uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
+        with:
+          context: ./rust
+          push: true
+          tags: genomehubs/blobtk:develop
+          labels: ${{ steps.meta.outputs.labels }}
 
   upload-to-pypi:
     name: Upload to PyPI
     runs-on: ubuntu-latest
-    if: "startsWith(github.ref, 'refs/tags/')"
-    needs: [macos, linux]
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - create-github-release
+      # - macos-wheels
+      # - linux-wheels
+      # - sdist-wheels
     steps:
       - uses: actions/download-artifact@v3
         with:
@@ -194,10 +281,27 @@ jobs:
           pip install --upgrade twine
           twine upload --skip-existing *
 
+  # release:
+  #   name: Release
+  #   runs-on: ubuntu-latest
+  #   if: startsWith(github.ref, 'refs/tags/')
+  #   needs: [linux, macos-x86_64]
+  #   steps:
+  #     - uses: actions/download-artifact@v3
+  #       with:
+  #         name: wheels
+  #     - name: Publish to PyPI
+  #       uses: PyO3/maturin-action@v1
+  #       env:
+  #         MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+  #       with:
+  #         command: upload
+  #         args: --skip-existing *
+
   publish-crate:
     name: Publish crate
     runs-on: ubuntu-latest
-    if: "startsWith(github.ref, 'refs/tags/')"
+    if: startsWith(github.ref, 'refs/tags/')
     needs: create-github-release
     steps:
       - uses: actions/checkout@v3
@@ -210,14 +314,17 @@ jobs:
   create-conda-release-macos:
     name: Create conda release Mac
     runs-on: macos-latest
-    #if: "startsWith(github.ref, 'refs/tags/')"
-    needs: macos
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - create-github-release
+      # - macos-binary
+      # - macos-wheels
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
         with:
           auto-update-conda: true
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.10"
       - uses: actions/download-artifact@v3
         with:
           name: binaries
@@ -249,8 +356,11 @@ jobs:
     name: Create conda release Linux
     runs-on: ubuntu-latest
     #container: quay.io/pypa/manylinux2014_x86_64
-    #if: "startsWith(github.ref, 'refs/tags/')"
-    needs: linux
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - create-github-release
+      # - linux-binary
+      # - linux-wheels
     steps:
       - uses: actions/checkout@v3
       - uses: actions/download-artifact@v3
