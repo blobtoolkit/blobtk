@@ -28,6 +28,9 @@ pub mod filter;
 /// Functions for file/terminal IO.
 pub mod io;
 
+/// Functions for input parsing.
+pub mod parse;
+
 /// Generate a plot.
 pub mod plot;
 
