@@ -272,11 +272,17 @@ pub struct PlotOptions {
 #[pyclass]
 pub struct TaxonomyOptions {
     /// Path to NCBI taxdump directory
-    #[arg(long, short = 't')]
+    #[arg(long = "taxdump", short = 't')]
     pub taxdump: Option<PathBuf>,
-    /// Root taxon to build taxonomy for
+    /// Root taxon/taxa for filtered taxonomy
     #[arg(long = "root-id", short = 'r')]
-    pub root_id: Option<String>,
+    pub root_taxon_id: Option<Vec<String>>,
+    /// Base taxon for filtered taxonomy lineages
+    #[arg(long = "base-id", short = 'b')]
+    pub base_taxon_id: Option<String>,
+    /// Path to NCBI taxdump directory
+    #[arg(long = "taxdump-out")]
+    pub taxdump_out: Option<PathBuf>,
 }
 
 /// Command line argument parser
