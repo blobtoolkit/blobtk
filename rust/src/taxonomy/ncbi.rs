@@ -265,7 +265,7 @@ pub fn parse_taxdump(taxdump: &Option<PathBuf>) -> Result<Nodes, anyhow::Error> 
 }
 
 pub fn write_taxdump(
-    nodes: Nodes,
+    nodes: &Nodes,
     root_taxon_ids: Option<Vec<String>>,
     base_taxon_id: Option<String>,
     taxdump: PathBuf,

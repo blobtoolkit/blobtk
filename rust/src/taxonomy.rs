@@ -11,9 +11,14 @@ use crate::cli;
 /// Functions for ncbi taxonomy processing.
 pub mod ncbi;
 
+/// Functions for name lookup.
+pub mod lookup;
+
 pub use cli::TaxonomyOptions;
 
 pub use ncbi::{parse_taxdump, write_taxdump};
+
+pub use lookup::build_tries;
 
 /// Execute the `taxonomy` subcommand from `blobtk`.
 pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), anyhow::Error> {
@@ -21,13 +26,18 @@ pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), anyhow::Error> {
     if let Some(taxdump_out) = options.taxdump_out.clone() {
         let root_taxon_ids = options.root_taxon_id.clone();
         let base_taxon_id = options.base_taxon_id.clone();
-        write_taxdump(nodes, root_taxon_ids, base_taxon_id, taxdump_out);
+        write_taxdump(&nodes, root_taxon_ids, base_taxon_id, taxdump_out);
     }
 
-    // println!("processed {} nodes", nodes.nodes.len());
-
+    let tries = build_tries(&nodes);
+    let rank = "genus";
+    let higher_rank = "family";
+    let trie = tries.get(&format!("{}_{}", rank, higher_rank)).unwrap();
+    dbg!(trie.predictive_search(vec!["Arabidopsis", "Brassicaceae"]));
+    // TODO: make lookup case insensitive
+    // TODO: add support for synonym matching
     // TODO: read in taxon names from additonal files
-    // TODO: implement hierarcical fuzzy matching
-
+    // TODO: add support for fuzzy matching?
+    // TODO: hang additional taxa on the loaded taxonomy
     Ok(())
 }
