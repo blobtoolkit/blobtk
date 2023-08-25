@@ -1,0 +1,9 @@
+path: test/taxonomy/canidae/ncbi
+taxonomy_format: ncbi
+root_taxon_id: [9611]
+base_taxon_id: 33208
+taxonomies:
+  - path: test/taxonomy/canidae/gbif
+    taxonomy_format: ncbi
+    root_taxon_id: [9701]
+    base_taxon_id: 1

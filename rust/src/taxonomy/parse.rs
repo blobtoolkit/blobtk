@@ -13,12 +13,16 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use anyhow;
+use convert_case::{Case, Casing};
+use csv::ReaderBuilder;
 use nom::{
     bytes::complete::{tag, take_until},
     combinator::map,
     multi::separated_list0,
     IResult,
 };
+// use serde::Deserialize;
+
 use struct_iterable::Iterable;
 
 use crate::io;
@@ -89,6 +93,29 @@ impl Node {
             rank: v[2].to_string(),
             ..Default::default()
         })(input)
+    }
+
+    pub fn tax_id(&self) -> String {
+        self.tax_id.clone()
+    }
+
+    pub fn rank(&self) -> String {
+        self.rank.clone()
+    }
+
+    pub fn scientific_name(&self) -> String {
+        match self.scientific_name.as_ref() {
+            Some(name) => name.clone(),
+            None => "".to_string(),
+        }
+    }
+
+    pub fn lc_tax_id(&self) -> String {
+        self.tax_id.to_case(Case::Lower)
+    }
+
+    pub fn lc_scientific_name(&self) -> String {
+        self.scientific_name().to_case(Case::Lower)
     }
 }
 
@@ -173,37 +200,29 @@ impl Nodes {
                     }
                 }
             }
-            let root_node = self.nodes.get(&root_id).unwrap();
-            writeln!(nodes_writer, "{}", &root_node).unwrap();
-            if let Some(names) = root_node.names.as_ref() {
-                for name in names {
-                    writeln!(names_writer, "{}", &name).unwrap();
+            if let Some(root_node) = self.nodes.get(&root_id) {
+                writeln!(nodes_writer, "{}", &root_node).unwrap();
+                if let Some(names) = root_node.names.as_ref() {
+                    for name in names {
+                        writeln!(names_writer, "{}", &name).unwrap();
+                    }
                 }
-            }
-            if let Some(children) = self.children.get(&root_id) {
-                for child in children {
-                    self.write_taxdump(vec![child.clone()], None, nodes_writer, names_writer)
+                if let Some(children) = self.children.get(&root_id) {
+                    for child in children {
+                        self.write_taxdump(vec![child.clone()], None, nodes_writer, names_writer)
+                    }
                 }
             }
         }
     }
 }
 
-pub fn parse_taxdump(taxdump: &Option<PathBuf>) -> Result<Nodes, anyhow::Error> {
+pub fn parse_taxdump(taxdump: PathBuf) -> Result<Nodes, anyhow::Error> {
     let mut nodes = HashMap::new();
     let mut children = HashMap::new();
 
-    let nodes_file = match taxdump.clone() {
-        Some(mut d) => {
-            d.push("nodes.dmp");
-            d
-        }
-        None => {
-            return Ok(Nodes {
-                ..Default::default()
-            })
-        }
-    };
+    let mut nodes_file = taxdump.clone();
+    nodes_file.push("nodes.dmp");
 
     // Parse nodes.dmp file
     if let Ok(lines) = io::read_lines(nodes_file) {
@@ -228,17 +247,8 @@ pub fn parse_taxdump(taxdump: &Option<PathBuf>) -> Result<Nodes, anyhow::Error> 
         }
     }
 
-    let names_file = match taxdump.clone() {
-        Some(mut d) => {
-            d.push("names.dmp");
-            d
-        }
-        None => {
-            return Ok(Nodes {
-                ..Default::default()
-            })
-        }
-    };
+    let mut names_file = taxdump.clone();
+    names_file.push("names.dmp");
 
     // Parse names.dmp file and add to nodes
     if let Ok(lines) = io::read_lines(names_file) {
@@ -288,6 +298,100 @@ pub fn write_taxdump(
         &mut nodes_writer,
         &mut names_writer,
     );
+}
+
+pub fn parse_gbif(gbif_backbone: PathBuf) -> Result<Nodes, anyhow::Error> {
+    let mut nodes = HashMap::new();
+    let mut children = HashMap::new();
+
+    let mut rdr = ReaderBuilder::new()
+        .has_headers(false)
+        .delimiter(b'\t')
+        .from_path(gbif_backbone)?;
+
+    // Status can be:
+    // ACCEPTED
+    // DOUBTFUL
+    // HETEROTYPIC_SYNONYM
+    // HOMOTYPIC_SYNONYM
+    // MISAPPLIED
+    // PROPARTE_SYNONYM
+    // SYNONYM
+    let mut ignore = HashSet::new();
+    ignore.insert("DOUBTFUL");
+    ignore.insert("MISAPPLIED");
+    for result in rdr.records() {
+        let record = result?;
+        let status = record.get(4).unwrap();
+        if ignore.contains(status) {
+            continue;
+        }
+
+        let tax_id = record.get(0).unwrap().to_string();
+        let name_class = match status {
+            "ACCEPTED" => "scientific name".to_string(),
+            _ => "synonym".to_string(),
+        };
+        let taxon_name = record.get(19).unwrap().to_string();
+        let mut parent_tax_id = record.get(1).unwrap().to_string();
+        if parent_tax_id == "\\N" {
+            parent_tax_id = tax_id.clone()
+        }
+        let name = Name {
+            tax_id: tax_id.clone(),
+            name: taxon_name.clone(),
+            class: Some(name_class.clone()),
+            ..Default::default()
+        };
+        match nodes.entry(tax_id.clone()) {
+            Entry::Vacant(e) => {
+                let node = Node {
+                    tax_id,
+                    parent_tax_id,
+                    rank: record.get(5).unwrap().to_case(Case::Lower),
+                    scientific_name: if name_class == "scientific name" {
+                        Some(taxon_name)
+                    } else {
+                        None
+                    },
+                    names: Some(vec![name]),
+                    ..Default::default()
+                };
+                let parent = node.parent_tax_id.clone();
+                let child = node.tax_id.clone();
+                if parent != child {
+                    match children.entry(parent) {
+                        Entry::Vacant(e) => {
+                            e.insert(vec![child]);
+                        }
+                        Entry::Occupied(mut e) => {
+                            e.get_mut().push(child);
+                        }
+                    }
+                }
+
+                e.insert(node);
+            }
+            Entry::Occupied(mut e) => {
+                if name_class == "scientific name" {
+                    e.get_mut().scientific_name = Some(taxon_name);
+                }
+                if let Some(names) = e.get_mut().names.as_mut() {
+                    names.push(name);
+                }
+            }
+        }
+
+        // println!("{:?}", record.get(0));
+        // let node = Node {
+        //     tax_id,
+        //     parent_tax_id: record.get(1).unwrap().to_string(),
+        //     rank: record.get(5).unwrap().to_case(Case::Lower),
+        //     scientific_name: Some(record.get(19).unwrap().to_string()),
+        //     ..Default::default()
+        // };
+    }
+    Ok(Nodes { nodes, children })
 }
 
 #[cfg(test)]

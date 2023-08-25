@@ -168,6 +168,20 @@ Snail plot (as svg):
 blobtk plot -v snail -d /path/to/BlobDir -o snail_plot_filename.svg
 ```
 
+### `blobtk taxonomy`
+
+Filter NCBI taxonomy for Canidae
+
+```
+blobtk taxonomy -t /path/to/ncbi/taxdump -r 9611 -b 1 --taxdump-out /tmp/ncbi-canidae
+```
+
+Filter GBIF taxonomy for Canidae
+
+```
+./target/release/blobtk taxonomy -g ~/Downloads/gbif/backbone-simple.txt -r 9701 -b 1 --taxdump-out /tmp/gbif-canidae
+```
+
 ### Python module
 
 #### depth

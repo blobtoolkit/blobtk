@@ -1,9 +1,13 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::str::FromStr;
+use std::string::ParseError;
 
 use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 use clap_num::number_range;
 use pyo3::pyclass;
+use serde;
+use serde::{Deserialize, Serialize};
 
 use crate::plot::axis::Scale;
 use crate::plot::data::Reducer;
@@ -267,22 +271,44 @@ pub struct PlotOptions {
     pub color: Option<Vec<String>>,
 }
 
+/// Valid taxonomy formats
+#[derive(ValueEnum, Parser, Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum TaxonomyFormat {
+    NCBI,
+    GBIF,
+}
+
 /// Options to pass to `blobtk taxonomy`
-#[derive(Parser, Debug)]
+#[derive(Default, Parser, Serialize, Deserialize, Clone, Debug)]
 #[pyclass]
 pub struct TaxonomyOptions {
-    /// Path to NCBI taxdump directory
+    /// Path to backbone taxonomy file/directory
     #[arg(long = "taxdump", short = 't')]
-    pub taxdump: Option<PathBuf>,
+    pub path: Option<PathBuf>,
+    #[arg(long = "taxonomy-format", short = 'f')]
+    pub taxonomy_format: Option<TaxonomyFormat>,
     /// Root taxon/taxa for filtered taxonomy
     #[arg(long = "root-id", short = 'r')]
     pub root_taxon_id: Option<Vec<String>>,
     /// Base taxon for filtered taxonomy lineages
     #[arg(long = "base-id", short = 'b')]
     pub base_taxon_id: Option<String>,
-    /// Path to NCBI taxdump directory
+    // /// Path to a directory containing files to be mapped to the taxonomy
+    // #[arg(long = "data-dir", short = 'd')]
+    // pub data_dir: Option<Vec<PathBuf>>,
+    /// Path to output filtered backbone taxonomy
     #[arg(long = "taxdump-out")]
-    pub taxdump_out: Option<PathBuf>,
+    pub out: Option<PathBuf>,
+    // /// Path to GBIF backbone taxonomy file (simple text)
+    // #[arg(long = "gbif-backbone", short = 'g')]
+    // pub gbif_backbone: Option<PathBuf>,
+    /// Path to YAML format config file
+    #[arg(long = "config", short = 'c')]
+    pub config_file: Option<PathBuf>,
+    /// List of taxonomies to map to backbone
+    #[clap(skip)]
+    pub taxonomies: Option<Vec<TaxonomyOptions>>,
 }
 
 /// Command line argument parser
