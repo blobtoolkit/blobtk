@@ -103,6 +103,13 @@ impl Node {
         self.rank.clone()
     }
 
+    pub fn rank_letter(&self) -> char {
+        if self.rank == "subspecies" {
+            return 'b';
+        }
+        self.rank.chars().next().unwrap()
+    }
+
     pub fn scientific_name(&self) -> String {
         match self.scientific_name.as_ref() {
             Some(name) => name.clone(),
@@ -165,6 +172,7 @@ impl Nodes {
         if tax_id == root_id {
             return nodes;
         }
+        let mut prev_tax_id = tax_id.clone();
         while tax_id != root_id {
             if let Some(node) = self.parent(&tax_id) {
                 tax_id = &node.tax_id;
@@ -172,6 +180,10 @@ impl Nodes {
             } else {
                 break;
             }
+            if tax_id == &prev_tax_id {
+                break;
+            }
+            prev_tax_id = tax_id.clone();
         }
         nodes.into_iter().rev().collect()
     }

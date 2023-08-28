@@ -23,3 +23,9 @@ Map gbif to ncbi using
 ```
 ./target/release/blobtk taxonomy -c test/taxonomy/config.yaml
 ```
+
+or
+
+```
+time ./target/release/blobtk taxonomy -c test/taxonomy/config_metazoa.yaml
+```

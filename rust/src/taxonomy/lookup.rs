@@ -1,12 +1,11 @@
-use std::collections::HashSet;
-
-use trie_rs::{Trie, TrieBuilder};
+use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet};
 
 use crate::{taxonomy::parse, utils::styled_progress_bar};
 
 use parse::Nodes;
 
-pub fn build_trie(nodes: &Nodes) -> Trie<String> {
+pub fn build_lookup(nodes: &Nodes) -> HashMap<String, Vec<String>> {
     let ranks = [
         "subspecies",
         "species",
@@ -18,12 +17,12 @@ pub fn build_trie(nodes: &Nodes) -> Trie<String> {
         "kingdom",
     ];
     let higher_ranks = ["family", "order", "class", "phylum", "kingdom"];
-    let mut builder = TrieBuilder::<String>::new();
+    let mut table = HashMap::new();
 
     let rank_set: HashSet<&str> = HashSet::from_iter(ranks.iter().cloned());
     let higher_rank_set: HashSet<&str> = HashSet::from_iter(higher_ranks.iter().cloned());
     let node_count = nodes.nodes.len();
-    let progress_bar = styled_progress_bar(node_count, "Building lookup trie");
+    let progress_bar = styled_progress_bar(node_count, "Building lookup hash");
 
     for (tax_id, node) in nodes.nodes.iter() {
         progress_bar.inc(1);
@@ -31,13 +30,21 @@ pub fn build_trie(nodes: &Nodes) -> Trie<String> {
             let lineage = nodes.lineage(&"1".to_string(), tax_id);
             for n in lineage.into_iter().rev() {
                 if higher_rank_set.contains(n.rank.as_str()) {
-                    builder.push(vec![
-                        node.rank(),
+                    let key = format!(
+                        "{}:{}:{}:{}",
+                        node.rank_letter(),
                         node.lc_scientific_name(),
-                        n.rank(),
-                        n.lc_scientific_name(),
-                        node.tax_id(),
-                    ])
+                        n.rank_letter(),
+                        n.lc_scientific_name()
+                    );
+                    match table.entry(key) {
+                        Entry::Vacant(e) => {
+                            e.insert(vec![node.tax_id()]);
+                        }
+                        Entry::Occupied(mut e) => {
+                            e.get_mut().push(node.tax_id());
+                        }
+                    }
                     // if let Some(names) = n.names.as_ref() {
                     //     for name in names {
                     //         builder.push(name.name.split(" ").collect::<Vec<&str>>());
@@ -48,14 +55,11 @@ pub fn build_trie(nodes: &Nodes) -> Trie<String> {
         }
     }
     progress_bar.finish();
-    eprintln!("Building trie of {} nodes...", node_count);
-    let trie = builder.build();
-    eprintln!("    ...done");
-    trie
+    table
 }
 
 pub fn lookup_nodes(new_nodes: &Nodes, nodes: &Nodes) {
-    let trie = build_trie(&nodes);
+    let table = build_lookup(&nodes);
     let ranks = [
         "subspecies",
         "species",
@@ -77,27 +81,27 @@ pub fn lookup_nodes(new_nodes: &Nodes, nodes: &Nodes) {
         progress_bar.inc(1);
         if rank_set.contains(node.rank.as_str()) {
             let lineage = new_nodes.lineage(&"1".to_string(), tax_id);
-            let mut tax_id = None;
+            let mut match_tax_id = None;
             for n in lineage.into_iter().rev() {
                 if higher_rank_set.contains(n.rank.as_str()) {
-                    let matches = trie.predictive_search(vec![
-                        node.rank(),
+                    let key = format!(
+                        "{}:{}:{}:{}",
+                        node.rank_letter(),
                         node.lc_scientific_name(),
-                        n.rank(),
-                        n.lc_scientific_name(),
-                    ]);
-                    if matches.len() == 1 {
-                        tax_id = Some(matches[0][4].clone());
-                        continue;
-                    }
-                    // if let Some(names) = n.names.as_ref() {
-                    //     for name in names {
-                    //         builder.push(name.name.split(" ").collect::<Vec<&str>>());
-                    //     }
-                    // }
+                        n.rank_letter(),
+                        n.lc_scientific_name()
+                    );
+                    match table.get(&key) {
+                        None => (),
+                        Some(value) => {
+                            if value.len() == 1 {
+                                match_tax_id = Some(value[0].clone());
+                            }
+                        }
+                    };
                 }
             }
-            if let Some(ref_tax_id) = tax_id {
+            if let Some(ref_tax_id) = match_tax_id {
                 hits.push(ref_tax_id.clone());
                 // eprintln!("{}: {}", ref_tax_id, node.tax_id());
                 continue;
