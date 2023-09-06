@@ -72,7 +72,7 @@ impl Default for LegendEntry {
     }
 }
 
-pub fn legend(
+pub fn legend_group(
     title: String,
     entries: Vec<LegendEntry>,
     subtitle: Option<String>,

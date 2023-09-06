@@ -12,9 +12,9 @@ use crate::blobdir::{self, BuscoGene};
 
 use super::axis::{TickOptions, TickStatus};
 use super::component::{
-    arc_path, legend, path_axis_major, path_axis_minor, path_gridline_major, path_gridline_minor,
-    polar_to_path, polar_to_path_bounded, set_axis_ticks, set_axis_ticks_circular, LegendEntry,
-    LegendShape,
+    arc_path, legend_group, path_axis_major, path_axis_minor, path_gridline_major,
+    path_gridline_minor, polar_to_path, polar_to_path_bounded, set_axis_ticks,
+    set_axis_ticks_circular, LegendEntry, LegendShape,
 };
 use super::style::{path_filled, path_open, path_partial};
 use crate::cli;
@@ -302,7 +302,7 @@ pub fn scaffold_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOption
     });
 
     let title = format!("{} statistics", titlecase(record));
-    legend(title, entries, None, 1)
+    legend_group(title, entries, None, 1)
 }
 
 pub fn composition_stats_legend(snail_stats: &SnailStats, _: &cli::PlotOptions) -> Group {
@@ -327,7 +327,7 @@ pub fn composition_stats_legend(snail_stats: &SnailStats, _: &cli::PlotOptions) 
     });
 
     let title = "Composition".to_string();
-    legend(title, entries, None, 1)
+    legend_group(title, entries, None, 1)
 }
 
 pub fn scale_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Group {
@@ -356,14 +356,14 @@ pub fn scale_stats_legend(snail_stats: &SnailStats, options: &cli::PlotOptions) 
     });
 
     let title = "Scale".to_string();
-    legend(title, entries, None, 1)
+    legend_group(title, entries, None, 1)
 }
 
 pub fn dataset_name_legend(snail_stats: &SnailStats, _: &cli::PlotOptions) -> Group {
     let entries = vec![];
 
     let title = format!("Dataset: {}", snail_stats.id);
-    legend(title, entries, None, 1)
+    legend_group(title, entries, None, 1)
 }
 
 pub fn busco_stats_legend(snail_stats: &SnailStats, _: &cli::PlotOptions) -> Group {
@@ -413,7 +413,7 @@ pub fn busco_stats_legend(snail_stats: &SnailStats, _: &cli::PlotOptions) -> Gro
     });
 
     let title = "BUSCO".to_string();
-    legend(title, entries, Some(subtitle), 2)
+    legend_group(title, entries, Some(subtitle), 2)
 }
 
 pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {

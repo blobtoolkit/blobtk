@@ -172,6 +172,7 @@ pub enum View {
     #[default]
     Blob,
     Cumulative,
+    Legend,
     Snail,
 }
 
