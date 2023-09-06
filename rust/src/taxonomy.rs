@@ -90,6 +90,15 @@ fn load_options(options: &cli::TaxonomyOptions) -> Result<cli::TaxonomyOptions, 
                 Some(out) => Some(out),
                 None => options.out.clone(),
             },
+            xref_label: match taxonomy_options.xref_label {
+                Some(xref_label) => Some(xref_label),
+                None => options.xref_label.clone(),
+            },
+            name_classes: if taxonomy_options.name_classes.len() > 0 {
+                taxonomy_options.name_classes.clone()
+            } else {
+                options.name_classes.clone()
+            },
             taxonomies: taxonomy_options.taxonomies.clone(),
             ..Default::default()
         });
@@ -120,7 +129,7 @@ fn taxdump_to_nodes(options: &cli::TaxonomyOptions) -> Result<Nodes, error::Erro
 /// Execute the `taxonomy` subcommand from `blobtk`.
 pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), anyhow::Error> {
     let options = load_options(&options)?;
-    let nodes = taxdump_to_nodes(&options).unwrap();
+    let mut nodes = taxdump_to_nodes(&options).unwrap();
     // if let Some(taxdump) = options.path.clone() {
     //     nodes = match options.taxonomy_format {
     //         Some(cli::TaxonomyFormat::NCBI) => parse_taxdump(taxdump)?,
@@ -140,8 +149,20 @@ pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), anyhow::Error> {
         for taxonomy in taxonomies {
             let new_nodes = taxdump_to_nodes(&taxonomy).unwrap();
             // match new_nodes to nodes
-            lookup_nodes(&new_nodes, &nodes);
+            lookup_nodes(
+                &new_nodes,
+                &mut nodes,
+                &taxonomy.name_classes,
+                &options.name_classes,
+                taxonomy.xref_label.clone(),
+            );
         }
+    }
+
+    if let Some(taxdump_out) = options.out.clone() {
+        let root_taxon_ids = options.root_taxon_id.clone();
+        let base_taxon_id = options.base_taxon_id.clone();
+        write_taxdump(&nodes, root_taxon_ids, base_taxon_id, taxdump_out);
     }
 
     // if let Some(gbif_backbone) = options.gbif_backbone.clone() {

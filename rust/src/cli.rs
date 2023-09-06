@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::str::FromStr;
-use std::string::ParseError;
+// use std::str::FromStr;
+// use std::string::ParseError;
 
 use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 use clap_num::number_range;
@@ -67,7 +67,7 @@ pub enum SubCommand {
     /// Process a BlobDir and produce static plots.
     /// Called as `blobtk plot`
     Plot(PlotOptions),
-    /// Process a taxonomy and lookup lineages.
+    /// [experimental] Process a taxonomy and lookup lineages.
     /// Called as `blobtk taxonomy`
     Taxonomy(TaxonomyOptions),
 }
@@ -306,9 +306,20 @@ pub struct TaxonomyOptions {
     /// Path to YAML format config file
     #[arg(long = "config", short = 'c')]
     pub config_file: Option<PathBuf>,
+    /// List of name_classes to use during taxon lookup
+    #[clap(skip)]
+    #[serde(default = "default_name_classes")]
+    pub name_classes: Vec<String>,
+    /// Label to use when setting as xref
+    #[clap(skip)]
+    pub xref_label: Option<String>,
     /// List of taxonomies to map to backbone
     #[clap(skip)]
     pub taxonomies: Option<Vec<TaxonomyOptions>>,
+}
+
+fn default_name_classes() -> Vec<String> {
+    vec!["scientific name".to_string()]
 }
 
 /// Command line argument parser

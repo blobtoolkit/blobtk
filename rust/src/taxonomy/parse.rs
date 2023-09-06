@@ -28,7 +28,7 @@ use struct_iterable::Iterable;
 use crate::io;
 
 /// A taxon name
-#[derive(Clone, Debug, Default, Eq, Iterable, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, Iterable, Ord, PartialEq, PartialOrd)]
 pub struct Name {
     pub tax_id: String,
     pub name: String,
@@ -72,7 +72,7 @@ impl fmt::Display for Name {
 }
 
 /// A taxonomy node
-#[derive(Clone, Debug, Default, Eq, Iterable, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, Iterable, Ord, PartialEq, PartialOrd)]
 pub struct Node {
     pub tax_id: String,
     pub parent_tax_id: String,
@@ -123,6 +123,30 @@ impl Node {
 
     pub fn lc_scientific_name(&self) -> String {
         self.scientific_name().to_case(Case::Lower)
+    }
+
+    pub fn names_by_class(&self, classes_vec: Option<&Vec<String>>, lc: bool) -> Vec<String> {
+        let mut filtered_names = vec![];
+        if let Some(names) = self.names.clone() {
+            for name in names {
+                if let Some(classes) = classes_vec {
+                    if let Some(class) = name.class {
+                        if classes.contains(&class) {
+                            if lc {
+                                filtered_names.push(name.name.to_case(Case::Lower));
+                            } else {
+                                filtered_names.push(name.name.clone());
+                            }
+                        }
+                    }
+                } else if lc {
+                    filtered_names.push(name.name.to_case(Case::Lower));
+                } else {
+                    filtered_names.push(name.name.clone());
+                }
+            }
+        }
+        filtered_names
     }
 }
 
@@ -226,6 +250,16 @@ impl Nodes {
                 }
             }
         }
+    }
+
+    pub fn nodes_by_rank(&self, rank: &str) -> Vec<Node> {
+        let mut nodes = vec![];
+        for node in self.nodes.iter() {
+            if node.1.rank == rank {
+                nodes.push(node.1.clone());
+            }
+        }
+        nodes
     }
 }
 
