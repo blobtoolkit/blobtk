@@ -21,7 +21,7 @@ requirements:
     - {{ compiler('rust') }}
     - cmake
     - make
-    - rust >=1.52
+    - rust >=1.70
     - pkg-config
     #- python {{ python }}
   host:
