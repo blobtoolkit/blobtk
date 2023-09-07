@@ -99,7 +99,7 @@ jobs:
       - name: Install libssl-dev
         run: sudo apt-get install -y build-essential libssl-dev pkg-config cpanminus openssl librust-openssl-sys-dev perl-core
       - name: Install IPC::Cmd
-        run: export PERL_BASE="/usr/local/perl" && export PERL_MM_OPT="INSTALL_BASE=$PERL_BASE" && export PERL_MB_OPT="--install_base $PERL_BASE" && export PERL5LIB="$PERL_BASE/lib/perl5" &&sudo cpanm "IPC::Cmd"
+        run: export PERL_BASE=/usr/local/perl" && export PERL_MM_OPT="INSTALL_BASE=$PERL_BASE" && export PERL_MB_OPT="--install_base $PERL_BASE" && export PERL5LIB="$PERL_BASE/lib/perl5" && sudo cpanm IPC::Cmd
       - uses: actions/setup-python@v4
         with:
           python-version: "3.10"
