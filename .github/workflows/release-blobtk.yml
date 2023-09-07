@@ -99,7 +99,7 @@ jobs:
       - name: Install libssl-dev
         run: sudo apt-get install -y build-essential libssl-dev pkg-config cpanminus openssl librust-openssl-sys-dev
       - name: Install IPC::Cmd
-        run: cpanm IPC::Cmd
+        run: export PERL5LIB=.:$PERL5LIB && cpanm IPC::Cmd
       - uses: actions/setup-python@v4
         with:
           python-version: "3.10"
