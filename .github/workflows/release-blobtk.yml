@@ -89,7 +89,7 @@ jobs:
   linux-wheels:
     runs-on: ubuntu-latest
     needs:
-      - linux-binary
+      # - linux-binary
       - sdist-wheels
     # strategy:
     #   matrix:
@@ -97,7 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install libssl-dev
-        run: sudo apt-get install -y build-essential libssl-dev pkg-config cpanminus openssl librust-openssl-sys-dev perl-core
+        run: sudo apt-get install -y build-essential libssl-dev pkg-config cpanminus openssl librust-openssl-sys-dev
       - name: Install IPC::Cmd
         run: export PERL_BASE=/usr/local/perl" && export PERL_MM_OPT="INSTALL_BASE=$PERL_BASE" && export PERL_MB_OPT="--install_base $PERL_BASE" && export PERL5LIB="$PERL_BASE/lib/perl5" && sudo cpanm IPC::Cmd
       - uses: actions/setup-python@v4
