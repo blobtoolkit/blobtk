@@ -138,7 +138,7 @@ jobs:
   macos-wheels:
     runs-on: macos-latest
     needs:
-      - macos-binary
+      # - macos-binary
       - sdist-wheels
     steps:
       - uses: actions/checkout@v3
