@@ -13,7 +13,7 @@ use plot::category::Category;
 
 use super::axis::{AxisName, AxisOptions, ChartAxes, Position, Scale};
 use super::chart::{Chart, Dimensions};
-use super::component::{legend, LegendEntry, LegendShape};
+use super::component::{legend_group, LegendEntry, LegendShape};
 use super::data::{Bin, HistogramData, Reducer, ScatterData, ScatterPoint};
 use super::ShowLegend;
 
@@ -384,7 +384,7 @@ pub fn category_legend_full(categories: Vec<Category>, show_legend: ShowLegend) 
         let subtitle = match show_legend {
             ShowLegend::Compact => None,
             ShowLegend::Default | ShowLegend::Full => Some(cat.clone().subtitle()),
-            ShowLegend::None => return legend(title, entries, None, 1),
+            ShowLegend::None => return legend_group(title, entries, None, 1),
         };
         entries.push(LegendEntry {
             title: format!("{}", cat.title),
@@ -393,7 +393,7 @@ pub fn category_legend_full(categories: Vec<Category>, show_legend: ShowLegend) 
             ..Default::default()
         });
     }
-    legend(title, entries, None, 1)
+    legend_group(title, entries, None, 1)
 }
 
 pub fn plot(
@@ -604,6 +604,43 @@ pub fn plot(
         .add(
             category_legend_full(scatter_data.categories, options.show_legend.clone())
                 .set("transform", format!("translate({}, {})", legend_x, 10.0)),
+        );
+
+    document
+}
+
+pub fn legend(
+    blob_dimensions: BlobDimensions,
+    scatter_data: ScatterData,
+    options: &cli::PlotOptions,
+) -> Document {
+    let height = scatter_data.categories.len() * 26;
+
+    let mut width =
+        blob_dimensions.hist_width + blob_dimensions.margin[3] + blob_dimensions.padding[3];
+
+    width = match options.show_legend {
+        ShowLegend::Compact => width,
+        _ => width + 220.0,
+    };
+
+    let offset_x = match options.show_legend {
+        ShowLegend::Compact => 0.0,
+        _ => width - 180.0,
+    };
+
+    let document = Document::new()
+        .set("viewBox", (0, 0, width, height))
+        .add(
+            Rectangle::new()
+                .set("fill", "#ffffff")
+                .set("stroke", "none")
+                .set("width", width)
+                .set("height", height),
+        )
+        .add(
+            category_legend_full(scatter_data.categories, options.show_legend.clone())
+                .set("transform", format!("translate({}, {})", offset_x, 10.0)),
         );
 
     document

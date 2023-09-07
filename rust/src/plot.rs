@@ -251,7 +251,10 @@ fn insert_hashmap_option(
     Ok(())
 }
 
-pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
+fn set_blob_data(
+    options: &PlotOptions,
+    meta: &blobdir::Meta,
+) -> Result<(HashMap<String, String>, BlobData), anyhow::Error> {
     let mut plot_meta: HashMap<String, String> = HashMap::new();
     insert_hashmap_option(
         &mut plot_meta,
@@ -281,11 +284,8 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(),
         meta.plot.cat.clone(),
         Some("_".to_string()),
     )?;
-
     let (plot_values, cat_values) = blobdir::get_plot_values(&meta, &options.blobdir, &plot_meta)?;
-
     let palette = set_palette(&options.palette, &options.color, options.cat_count);
-
     let (cat_order, cat_indices) = category::set_cat_order(
         &cat_values,
         &plot_values["z"],
@@ -293,9 +293,6 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(),
         &options.cat_count,
         &palette,
     );
-    // let id = meta.id.clone();
-    // let record_type = meta.record_type.clone();
-
     let filters = blobdir::parse_filters(&options, Some(&plot_meta));
     let wanted_indices = blobdir::set_filters(filters, &meta, &options.blobdir);
     let z = blobdir::apply_filter_float(&plot_values["z"], &wanted_indices);
@@ -316,8 +313,13 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(),
         y: blobdir::apply_filter_float(&plot_values["y"], &wanted_indices),
         z,
         cat: cat_indices,
-        cat_order: cat_order,
+        cat_order,
     };
+    Ok((plot_meta, blob_data))
+}
+
+pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
+    let (plot_meta, blob_data) = set_blob_data(options, meta)?;
 
     let dimensions = BlobDimensions {
         ..Default::default()
@@ -353,6 +355,20 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(),
         max_bin,
         &options,
     );
+    save_by_suffix(options, document)?;
+    Ok(())
+}
+
+pub fn plot_legend(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
+    let (plot_meta, blob_data) = set_blob_data(options, meta)?;
+
+    let dimensions = BlobDimensions {
+        ..Default::default()
+    };
+
+    let scatter_data = blob::blob_points(plot_meta, &blob_data, &dimensions, &meta, &options);
+
+    let document: Document = blob::legend(dimensions, scatter_data, &options);
     save_by_suffix(options, document)?;
     Ok(())
 }
@@ -412,6 +428,7 @@ pub fn plot(options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
     match view {
         cli::View::Blob => plot_blob(&meta, &options)?,
         cli::View::Cumulative => plot_cumulative(&meta, &options)?,
+        cli::View::Legend => plot_legend(&meta, &options)?,
         cli::View::Snail => plot_snail(&meta, &options)?,
     }
     Ok(())

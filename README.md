@@ -1,4 +1,4 @@
-# BlobTk (v0.3.6)
+# BlobTk (v0.4.1)
 
 ## About
 
@@ -13,14 +13,14 @@ The command line tool is available as a linux/macos binary from the latest relea
 linux:
 
 ```
-curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.3.6/blobtk-linux" > blobtk &&
+curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.4.1/blobtk-linux" > blobtk &&
 chmod 755 blobtk
 ```
 
 macos:
 
 ```
-curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.3.6/blobtk-macos" > blobtk &&
+curl -Ls "https://github.com/blobtoolkit/core/releases/download/0.4.1/blobtk-macos" > blobtk &&
 chmod 755 blobtk
 ```
 
@@ -166,6 +166,20 @@ Snail plot (as svg):
 
 ```
 blobtk plot -v snail -d /path/to/BlobDir -o snail_plot_filename.svg
+```
+
+### `blobtk taxonomy`
+
+Filter NCBI taxonomy for Canidae
+
+```
+blobtk taxonomy -t /path/to/ncbi/taxdump -r 9611 -b 1 --taxdump-out /tmp/ncbi-canidae
+```
+
+Filter GBIF taxonomy for Canidae
+
+```
+./target/release/blobtk taxonomy -g ~/Downloads/gbif/backbone-simple.txt -r 9701 -b 1 --taxdump-out /tmp/gbif-canidae
 ```
 
 ### Python module

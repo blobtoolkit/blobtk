@@ -4,12 +4,12 @@ on:
   push:
     branches:
       - main
-      - feature/statically-linked-binary
+      # - feature/taxonomy
     tags:
       - "*"
 
 env:
-  VERSION: 0.3.6
+  VERSION: 0.4.1
 
 jobs:
   macos-binary:
@@ -89,7 +89,7 @@ jobs:
   linux-wheels:
     runs-on: ubuntu-latest
     needs:
-      - linux-binary
+      # - linux-binary
       - sdist-wheels
     # strategy:
     #   matrix:
@@ -105,7 +105,7 @@ jobs:
           # target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter --target x86_64-unknown-linux-gnu -m rust/Cargo.toml
           sccache: "true"
-          manylinux: auto
+          # manylinux: auto
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
@@ -138,7 +138,7 @@ jobs:
   macos-wheels:
     runs-on: macos-latest
     needs:
-      - macos-binary
+      # - macos-binary
       - sdist-wheels
     steps:
       - uses: actions/checkout@v3
@@ -190,16 +190,15 @@ jobs:
         with:
           path: ./dist
       - name: create release
-        uses: "marvinpinto/action-automatic-releases@v1.2.1"
+        uses: softprops/action-gh-release@v1
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          draft: false
-          prerelease: false
-          title: "v${{github.ref_name}}"
           files: |
             dist/binaries/blobtk-*
             dist/wheels/blobtk-*
-            dist/wheels/blobtk*.tgz
+            dist/wheels/blobtk*.tar.gz
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-and-push-docker-release:
     runs-on: ubuntu-latest
@@ -208,17 +207,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Login to Docker Hub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        uses: docker/metadata-action@v2
         with:
           images: genomehubs/blobtk
       - name: Build and push Docker image
-        uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
+        uses: docker/build-push-action@v2
         with:
           context: ./rust
           push: true
@@ -233,17 +232,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Login to Docker Hub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
       - name: Extract metadata (tags, labels) for Docker
         id: meta
-        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        uses: docker/metadata-action@v2
         with:
           images: genomehubs/blobtk
       - name: Build and push Docker image
-        uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
+        uses: docker/build-push-action@v2
         with:
           context: ./rust
           push: true

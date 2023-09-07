@@ -1,4 +1,4 @@
-{% set version = "0.3.6" %}
+{% set version = "0.4.1" %}
 
 package:
   name: blobtk
@@ -21,7 +21,7 @@ requirements:
     - {{ compiler('rust') }}
     - cmake
     - make
-    - rust >=1.52
+    - rust >=1.70
     - pkg-config
     #- python {{ python }}
   host:
