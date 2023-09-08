@@ -91,18 +91,22 @@ jobs:
     needs:
       # - linux-binary
       - sdist-wheels
-    # strategy:
-    #   matrix:
-    #     target: [x86_64] # , x86, aarch64, armv7, s390x, ppc64le]
+    strategy:
+      matrix:
+        python:
+          - "3.10"
+        target:
+          - x86_64 # , x86, aarch64, armv7, s390x, ppc64le]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
+          python-version: ${{ matrix.python }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
-          # target: ${{ matrix.target }}
+          target: ${{ matrix.target }}
+          before-script-linux: export RUSTFLAGS="-C target-feature=+crt-static"
           args: --release --out dist --find-interpreter --target x86_64-unknown-linux-gnu -m rust/Cargo.toml
           sccache: "true"
           # manylinux: auto
