@@ -106,7 +106,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          before-script-linux: sudo apt install -y cpanminus && cpanm IPC::Cmd
+          before-script-linux: yum install -y perl-IPC-Cmd
           args: --release --out dist --find-interpreter --target x86_64-unknown-linux-gnu -m rust/Cargo.toml
           sccache: "true"
           manylinux: auto
