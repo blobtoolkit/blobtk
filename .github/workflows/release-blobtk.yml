@@ -106,9 +106,10 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
+          before-script-linux: sudo apt install -y cpanminus && cpanm IPC::Cmd
           args: --release --out dist --find-interpreter --target x86_64-unknown-linux-gnu -m rust/Cargo.toml
           sccache: "true"
-          manylinux: 2014/2_17
+          manylinux: auto
       - name: Upload wheels
         uses: actions/upload-artifact@v3
         with:
