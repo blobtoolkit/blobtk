@@ -2,7 +2,8 @@ FROM rust:1.72 as builder
 WORKDIR /usr/src/blobtk
 COPY . .
 RUN apt-get update && apt-get install -y cmake python3 && rm -rf /var/lib/apt/lists/*
-RUN cargo install --path .
+# RUN cargo install --path .
+RUN RUSTFLAGS="-C target-feature=+crt-static" cargo install --path . --target x86_64-unknown-linux-gnu
 
 FROM debian:bullseye-slim
 # RUN sed -r -i 's/^deb(.*)$/deb\1 contrib/g' /etc/apt/sources.list \
