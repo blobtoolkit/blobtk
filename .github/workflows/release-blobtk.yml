@@ -103,7 +103,9 @@ jobs:
     strategy:
       matrix:
         python:
+          - "3.9"
           - "3.10"
+          - "3.11"
         target:
           - x86_64 # , x86, aarch64, armv7, s390x, ppc64le]
     steps:
@@ -153,7 +155,9 @@ jobs:
     strategy:
       matrix:
         python:
+          - "3.9"
           - "3.10"
+          - "3.11"
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
@@ -241,11 +245,16 @@ jobs:
       - name: conda build
         run: |
           conda install -y conda-build
+          mkdir -p ./tmp
           export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
           mkdir -p ./dist/osx-amd64
-          echo "target_platform: osx-amd64" >> ./conda/conda_build_config.yaml
-          conda build --no-anaconda-upload ./conda --output-folder ./dist
-          ls ./dist/*
+          conda build --no-anaconda-upload --no-test ./conda --output-folder ./tmp
+          cd ./tmp
+          ls ./
+          ls ./osx-arm64
+          conda convert -p osx-arm64 osx-64/*.tar.bz2
+          mv ./tmp/osx-arm64/*.tar.bz2
+          ls ../dist/*
       - name: Upload package
         uses: actions/upload-artifact@v3
         with:
