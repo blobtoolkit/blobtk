@@ -25,18 +25,21 @@ jobs:
           targets: aarch64-apple-darwin
       - name: Build
         working-directory: ./rust
-        run: cargo build --release
+        run: |
+          cargo build --target=x86_64-apple-darwin --release
+          cargo build --target=aarch64-apple-darwin --release
       #     - name: Tests
       #       working-directory: ./rust
       #       run: cargo test --no-default-features --release
       - name: Rename binary
         run: |
-          mv ./rust/target/release/blobtk ./rust/target/release/blobtk-macos
+          mv ./rust/target/release/x86_64-apple-darwin/blobtk ./rust/target/release/blobtk-macos-x64
+          mv ./rust/target/release/aarch64-apple-darwin/blobtk ./rust/target/release/blobtk-macos-amd64
       - name: Upload binary
         uses: actions/upload-artifact@v3
         with:
           name: binaries
-          path: rust/target/release/blobtk-macos
+          path: rust/target/release/blobtk-macos-*
 
   linux-binary:
     runs-on: ubuntu-latest
@@ -52,7 +55,7 @@ jobs:
       - name: Build
         working-directory: ./rust
         # run: cargo build --target x86_64-unknown-linux-gnu --release
-        run: RUSTFLAGS="-C target-feature=+crt-static" cargo build --target x86_64-unknown-linux-gnu --release
+        run: RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static" cargo build --target x86_64-unknown-linux-gnu --release
       # - name: Tests
       #   working-directory: ./rust
       #   run: cargo test --no-default-features --release
@@ -239,13 +242,26 @@ jobs:
       - name: copy files
         run: |
           mkdir -p ./conda/dist
-          cp ./dist/*macos*.whl ./conda/dist/
-          cp ./dist/blobtk-macos ./conda/dist/blobtk
+          cp ./dist/*macos*x86_64.whl ./conda/dist/
+          cp ./dist/blobtk-macos-x64 ./conda/dist/blobtk
       - name: conda build
         run: |
           conda install -y conda-build
           export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
           mkdir -p ./dist/osx-64
+          conda build --no-anaconda-upload ./conda --output-folder ./dist
+          ls ./dist/*
+      - name: copy files
+        run: |
+          rm ./conda/dist/blobtk*
+          cp ./dist/*macos*universal2.whl ./conda/dist/
+          cp ./dist/blobtk-macos-amd64 ./conda/dist/blobtk
+      - name: conda build
+        run: |
+          conda install -y conda-build
+          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
+          mkdir -p ./dist/osx-amd64
+          echo "target_platform: osx-amd64" >> ./conda/conda_build_config.yaml
           conda build --no-anaconda-upload ./conda --output-folder ./dist
           ls ./dist/*
       - name: Upload package
@@ -400,5 +416,6 @@ jobs:
         run: |
           conda install -y anaconda-client
           export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
-          anaconda upload --force --label main ./dist/osx-64/*.tar.bz2
           anaconda upload --force --label main ./dist/linux-64/*.tar.bz2
+          anaconda upload --force --label main ./dist/osx-64/*.tar.bz2
+          anaconda upload --force --label main ./dist/osx-amd64/*.tar.bz2
