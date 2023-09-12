@@ -251,7 +251,7 @@ jobs:
           conda build --no-anaconda-upload --no-test ./conda --output-folder ./tmp
           cd ./tmp
           ls ./
-          conda convert -p osx-arm64 osx-64/*.tar.bz2 ./dist/osx-amd64
+          conda convert -f -p osx-arm64 osx-64/*.tar.bz2 ./dist/osx-amd64
           ls ./dist/osx-amd64
           ls ../dist/*
       - name: Upload package
