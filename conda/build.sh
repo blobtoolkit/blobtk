@@ -3,6 +3,13 @@
 if [ "$(uname)" == "Darwin" ]; then
     export HOME="/Users/distiller"
     export HOME=`pwd`
+    # copy rust binary
+    mkdir -p $PREFIX/bin
+    cp $RECIPE_DIR/dist/blobtk $PREFIX/bin/blobtk
+    chmod 755 $PREFIX/bin/blobtk
+else
+  # build binary with Rust
+  C_INCLUDE_PATH=$PREFIX/include OPENSSL_DIR=$PREFIX LIBRARY_PATH=$PREFIX/lib cargo install --path ./rust --root $PREFIX
 fi
 
 

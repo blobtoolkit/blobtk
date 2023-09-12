@@ -82,7 +82,7 @@ pub fn legend_group(
         Text::new()
     } else {
         Text::new()
-            .set("font-family", "Roboto, Open sans, sans-serif")
+            .set("font-family", "Roboto, 'Open sans', Arial, sans-serif")
             .set("font-size", "24")
             .set("text-anchor", "start")
             .set("dominant-baseline", "bottom")
@@ -111,7 +111,7 @@ pub fn legend_group(
             None => ("start", cell + gap, -gap / 2),
         };
         let entry_text = Text::new()
-            .set("font-family", "Roboto, Open sans, sans-serif")
+            .set("font-family", "Roboto, 'Open sans', Arial, sans-serif")
             .set("font-size", cell)
             .set("text-anchor", anchor)
             .set("dominant-baseline", "bottom")
@@ -119,10 +119,10 @@ pub fn legend_group(
             .set("fill", "black")
             .set("x", position)
             .set("y", cell + gap / 2)
-            .add(nodeText::new(&entry.clone().title));
+            .add(nodeText::new(&entry.title));
         let entry_subtext = if entry.subtitle.is_some() {
             Text::new()
-                .set("font-family", "Roboto, Open sans, sans-serif")
+                .set("font-family", "Roboto, 'Open sans', Arial, sans-serif")
                 .set("font-size", cell as f64 * 0.9)
                 .set("text-anchor", "start")
                 .set("dominant-baseline", "bottom")
@@ -130,7 +130,7 @@ pub fn legend_group(
                 .set("fill", "black")
                 .set("x", cell + gap)
                 .set("y", cell * 9 / 10 + gap / 2)
-                .add(nodeText::new(entry.clone().subtitle.clone().unwrap()))
+                .add(nodeText::new(entry.subtitle.clone().unwrap()))
         } else {
             Text::new()
         };
@@ -213,7 +213,7 @@ pub fn legend_group(
         None => (),
         Some(subtitle_string) => {
             let subtitle_text = Text::new()
-                .set("font-family", "Roboto, Open sans, sans-serif")
+                .set("font-family", "Roboto, 'Open sans', Arial, sans-serif")
                 .set("font-size", "18")
                 .set("text-anchor", "start")
                 .set("dominant-baseline", "bottom")
@@ -285,7 +285,7 @@ pub fn set_tick(
     };
     let text = match status {
         TickStatus::Major => Text::new()
-            .set("font-family", "Roboto, Open sans, sans-serif")
+            .set("font-family", "Roboto, 'Open sans', Arial, sans-serif")
             .set("font-size", "20")
             .set("text-anchor", "end")
             .set("dominant-baseline", "middle")
@@ -395,7 +395,7 @@ pub fn create_tick(
     let text = if axis_options.tick_labels && !label.is_empty() {
         // match tick_options.status {
         Text::new()
-            .set("font-family", "Roboto, Open sans, sans-serif")
+            .set("font-family", "Roboto, 'Open sans', Arial, sans-serif")
             .set("font-size", tick_options.font_size)
             .set("text-anchor", anchor)
             .set("dominant-baseline", baseline)
@@ -705,7 +705,7 @@ pub fn set_tick_circular(
         Text::new()
     } else {
         Text::new()
-            .set("font-family", "Roboto, Open sans, sans-serif")
+            .set("font-family", "Roboto, 'Open sans', Arial, sans-serif")
             .set("font-size", options.font_size.clone())
             .set("text-anchor", "middle")
             .set("dominant-baseline", "middle")
@@ -724,7 +724,7 @@ pub fn set_tick_circular(
     };
     let outer_text = match status {
         TickStatus::Major => Text::new()
-            .set("font-family", "Roboto, Open sans, sans-serif")
+            .set("font-family", "Roboto, 'Open sans', Arial, sans-serif")
             .set("font-size", "20")
             .set("text-anchor", "middle")
             .set("dominant-baseline", "bottom")
@@ -1107,7 +1107,7 @@ pub fn chart_axis(plot_axis: &AxisOptions) -> (Group, Group) {
         .set("y2", y2);
 
     let label = Text::new()
-        .set("font-family", "Roboto, Open sans, sans-serif")
+        .set("font-family", "Roboto, 'Open sans', Arial, sans-serif")
         .set("font-size", plot_axis.font_size)
         .set("text-anchor", "middle")
         .set("dominant-baseline", "middle")

@@ -301,7 +301,7 @@ pub fn parse_taxdump(taxdump: PathBuf) -> Result<Nodes, anyhow::Error> {
         for line in lines {
             if let Ok(s) = line {
                 let name = Name::parse(&s).unwrap().1;
-                let mut node = nodes.get_mut(&name.tax_id).unwrap();
+                let node = nodes.get_mut(&name.tax_id).unwrap();
                 if let Some(class) = name.clone().class {
                     if class == "scientific name" {
                         node.scientific_name = Some(name.clone().name)
