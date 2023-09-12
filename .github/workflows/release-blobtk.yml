@@ -148,18 +148,22 @@ jobs:
       matrix:
         python:
           - "3.10"
-        target:
-          - x64 # , x86, aarch64, armv7, s390x, ppc64le]
+        # target:
+        #   - aarch64-apple-darwin # , x86, aarch64, armv7, s390x, ppc64le]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
           python-version: ${{matrix.python}}
-          architecture: ${{matrix.target}}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           args: --release --out dist -i python${{matrix.python}} --target x86_64-apple-darwin -m rust/Cargo.toml
+          sccache: "true"
+      - name: Build universal wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          args: --release --out dist -i python${{matrix.python}} --universal2 -m rust/Cargo.toml
           sccache: "true"
       - name: Upload wheels
         uses: actions/upload-artifact@v3
