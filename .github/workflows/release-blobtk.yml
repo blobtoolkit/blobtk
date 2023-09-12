@@ -237,23 +237,6 @@ jobs:
           mkdir -p ./dist/osx-64
           conda build --no-anaconda-upload ./conda --output-folder ./dist
           ls ./dist/*
-      - name: copy files
-        run: |
-          rm ./conda/dist/blobtk*
-          cp ./dist/*macos*universal2.whl ./conda/dist/
-          cp ./dist/blobtk-macos-amd64 ./conda/dist/blobtk
-      - name: conda build
-        run: |
-          conda install -y conda-build
-          mkdir -p ./tmp
-          export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
-          mkdir -p ./dist/osx-amd64
-          conda build --no-anaconda-upload --no-test ./conda --output-folder ./tmp
-          cd ./tmp
-          ls ./
-          conda convert -f -p osx-arm64 osx-64/*.tar.bz2 ./dist/osx-amd64
-          ls ./dist/osx-amd64
-          ls ../dist/*
       - name: Upload package
         uses: actions/upload-artifact@v3
         with:
@@ -405,4 +388,3 @@ jobs:
           export ANACONDA_API_TOKEN=${{ secrets.ANACONDA_API_TOKEN }}
           anaconda upload --force --label main ./dist/linux-64/*.tar.bz2
           anaconda upload --force --label main ./dist/osx-64/*.tar.bz2
-          anaconda upload --force --label main ./dist/osx-amd64/*.tar.bz2
