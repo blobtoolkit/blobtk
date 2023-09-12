@@ -251,9 +251,8 @@ jobs:
           conda build --no-anaconda-upload --no-test ./conda --output-folder ./tmp
           cd ./tmp
           ls ./
-          ls ./osx-arm64
-          conda convert -p osx-arm64 osx-64/*.tar.bz2
-          mv ./tmp/osx-arm64/*.tar.bz2
+          conda convert -p osx-arm64 osx-64/*.tar.bz2 ./dist/osx-amd64
+          ls ./dist/osx-amd64
           ls ../dist/*
       - name: Upload package
         uses: actions/upload-artifact@v3
