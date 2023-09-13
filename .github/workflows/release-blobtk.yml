@@ -9,7 +9,7 @@ on:
       - "*"
 
 env:
-  VERSION: 0.4.6
+  VERSION: 0.4.7
 
 jobs:
   macos-binary:
