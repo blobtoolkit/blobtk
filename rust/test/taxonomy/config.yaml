@@ -1,0 +1,18 @@
+path: test/taxonomy/canidae/ncbi
+out: test/taxonomy/canidae/combined
+taxonomy_format: ncbi
+root_taxon_id:
+  - 33208
+base_taxon_id: 33208
+name_classes:
+  - scientific name
+  - synonym
+taxonomies:
+  - path: test/taxonomy/canidae/gbif
+    taxonomy_format: ncbi
+    root_taxon_id:
+      - 9701
+    base_taxon_id: 1
+    name_classes:
+      - scientific name
+    xref_label: gbif

@@ -2,7 +2,6 @@
 //! Invoked by calling:
 //! `blobtk filter <args>`
 
-use std::error::Error;
 use std::io::ErrorKind;
 
 use crate::bam;
@@ -16,7 +15,7 @@ pub use cli::FilterOptions;
 /// Execute the `filter` subcommand from `blobtk`.
 /// Pass a list of sequence names and a BAM file to generate
 /// a list of read names and filtered FASTA/FASTQ files.
-pub fn filter(options: &cli::FilterOptions) -> Result<(), Box<dyn Error>> {
+pub fn filter(options: &cli::FilterOptions) -> Result<(), anyhow::Error> {
     let seq_names = io::get_list(&options.list_file);
     if seq_names.is_empty() {
         return Ok(());

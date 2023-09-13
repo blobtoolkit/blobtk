@@ -1,0 +1,52 @@
+{
+  "id": "minimal",
+  "assembly": {
+    "file": "test/minimal.fa",
+    "scaffold-count": 1,
+    "span": 1
+  },
+  "fields": [
+    {
+      "id": "identifiers",
+      "type": "identifier"
+    },
+    {
+      "id": "gc",
+      "preload": true,
+      "scale": "scaleLinear",
+      "name": "GC",
+      "datatype": "float",
+      "range": [0.0, 0.0],
+      "type": "variable"
+    },
+    {
+      "preload": true,
+      "scale": "scaleLog",
+      "id": "length",
+      "name": "Length",
+      "clamp": false,
+      "datatype": "integer",
+      "range": [1, 1],
+      "type": "variable"
+    },
+    {
+      "scale": "scaleLinear",
+      "id": "ncount",
+      "name": "N count",
+      "datatype": "integer",
+      "range": [0, 0],
+      "type": "variable"
+    }
+  ],
+  "links": {},
+  "name": "minimal",
+  "plot": {
+    "x": "gc",
+    "z": "length"
+  },
+  "record_type": "record",
+  "records": 1,
+  "taxon": {},
+  "version": 1,
+  "revision": 0
+}

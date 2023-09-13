@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::io::{self, BufRead, BufWriter, Result, Write};
 use std::path::{Path, PathBuf};
 
-use std::fs::File;
+use std::fs::{create_dir_all, File};
 
 use flate2::write;
 use flate2::Compression;
@@ -26,7 +26,7 @@ fn read_stdin() -> Vec<Vec<u8>> {
     list
 }
 
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+pub fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where
     P: AsRef<Path>,
 {
@@ -64,7 +64,6 @@ pub fn get_file_writer(file_path: &PathBuf) -> Box<dyn Write> {
     };
 
     let writer: Box<dyn Write> = if file_path.extension() == Some(OsStr::new("gz")) {
-        // Error is here: Created file isn't gzip-compressed
         Box::new(BufWriter::with_capacity(
             128 * 1024,
             write::GzEncoder::new(file, Compression::default()),
@@ -78,7 +77,10 @@ pub fn get_file_writer(file_path: &PathBuf) -> Box<dyn Write> {
 pub fn get_writer(file_path: &Option<PathBuf>) -> Box<dyn Write> {
     let writer: Box<dyn Write> = match file_path {
         Some(path) if path == Path::new("-") => Box::new(BufWriter::new(io::stdout().lock())),
-        Some(path) => get_file_writer(path),
+        Some(path) => {
+            create_dir_all(path.parent().unwrap()).unwrap();
+            get_file_writer(path)
+        }
         None => Box::new(BufWriter::new(io::stdout().lock())),
     };
     writer
@@ -90,4 +92,10 @@ pub fn write_list(entries: &HashSet<Vec<u8>>, file_path: &Option<PathBuf>) -> Re
         writeln!(&mut writer, "{}", String::from_utf8(line.to_vec()).unwrap())?;
     }
     Ok(())
+}
+
+pub fn append_to_path(p: &PathBuf, s: &str) -> PathBuf {
+    let mut p = p.clone().into_os_string();
+    p.push(s);
+    p.into()
 }

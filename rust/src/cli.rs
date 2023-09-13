@@ -1,8 +1,17 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
+// use std::str::FromStr;
+// use std::string::ParseError;
 
-use clap::{ArgGroup, Parser, Subcommand};
+use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
+use clap_num::number_range;
 use pyo3::pyclass;
+use serde;
+use serde::{Deserialize, Serialize};
+
+use crate::plot::axis::Scale;
+use crate::plot::data::Reducer;
+use crate::plot::ShowLegend;
 
 // fn float_range(s: &str, min: f64, max: f64) -> Result<f64, String> {
 //     debug_assert!(min <= max, "minimum of {} exceeds maximum of {}", min, max);
@@ -55,6 +64,12 @@ pub enum SubCommand {
     /// Filter files based on list of sequence names.
     /// Called as `blobtk filter`
     Filter(FilterOptions),
+    /// Process a BlobDir and produce static plots.
+    /// Called as `blobtk plot`
+    Plot(PlotOptions),
+    /// [experimental] Process a taxonomy and lookup lineages.
+    /// Called as `blobtk taxonomy`
+    Taxonomy(TaxonomyOptions),
 }
 
 /// Options to pass to `blobtk depth`
@@ -150,6 +165,162 @@ pub struct FilterOptions {
     /// Path to output list of read IDs
     #[arg(long = "read-list", short = 'O', value_name = "TXT")]
     pub read_list: Option<PathBuf>,
+}
+
+#[derive(ValueEnum, Clone, Debug, Default)]
+pub enum View {
+    #[default]
+    Blob,
+    Cumulative,
+    Legend,
+    Snail,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum Origin {
+    O,
+    X,
+    Y,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum Palette {
+    Default,
+    Inverse,
+    Viridis,
+}
+
+fn less_than_5(s: &str) -> Result<f64, String> {
+    Ok(number_range(&format!("{}", s.parse::<f64>().unwrap() * 10.0), 2, 50)? as f64 / 10.0)
+}
+
+/// Options to pass to `blobtk plot`
+#[derive(Parser, Debug, Default)]
+#[pyclass]
+pub struct PlotOptions {
+    /// Path to BlobDir directory
+    #[arg(long, short = 'd')]
+    pub blobdir: PathBuf,
+    /// View to plot
+    #[arg(long, short = 'v')]
+    #[clap(value_enum)]
+    pub view: View,
+    /// Output filename
+    #[arg(long, short = 'o', default_value_t = String::from("output.svg"))]
+    pub output: String,
+    #[arg(long, short = 'f')]
+    pub filter: Vec<String>,
+    /// Segment count for snail plot
+    #[arg(long, short = 's', default_value_t = 1000)]
+    pub segments: usize,
+    /// Max span for snail plot
+    #[arg(long = "max-span")]
+    pub max_span: Option<usize>,
+    /// max scaffold length for snail plot
+    #[arg(long = "max-scaffold")]
+    pub max_scaffold: Option<usize>,
+    /// X-axis field for blob plot
+    #[arg(long = "x-field", short = 'x')]
+    pub x_field: Option<String>,
+    /// Y-axis field for blob plot
+    #[arg(long = "y-field", short = 'y')]
+    pub y_field: Option<String>,
+    /// Z-axis field for blob plot
+    #[arg(long = "z-field", short = 'z')]
+    pub z_field: Option<String>,
+    /// Category field for blob plot
+    #[arg(long = "category", short = 'c')]
+    pub cat_field: Option<String>,
+    /// Resolution for blob plot
+    #[arg(long, default_value_t = 30)]
+    pub resolution: usize,
+    /// Maximum histogram height for blob plot
+    #[arg(long = "hist-height")]
+    pub hist_height: Option<usize>,
+    /// Reducer function for blob plot
+    #[arg(long, value_enum, default_value_t = Reducer::Sum)]
+    pub reducer_function: Reducer,
+    /// Scale function for blob plot
+    #[arg(long, value_enum, default_value_t = Scale::SQRT)]
+    pub scale_function: Scale,
+    /// Scale factor for blob plot (0.2 - 5.0)
+    #[arg(long, default_value_t = 1.0, value_parser=less_than_5)]
+    pub scale_factor: f64,
+    /// X-axis limits for blob/cumulative plot (<min>,<max>)
+    #[arg(long = "x-limit")]
+    pub x_limit: Option<String>,
+    /// Y-axis limits for blob/cumulative plot (<min>,<max>)
+    #[arg(long = "y-limit")]
+    pub y_limit: Option<String>,
+    /// Maximum number of categories for blob/cumulative plot
+    #[arg(long = "cat-count", default_value_t = 10)]
+    pub cat_count: usize,
+    /// Maximum number of categories for blob/cumulative plot
+    #[arg(long = "legend", value_enum, default_value_t = ShowLegend::Default)]
+    pub show_legend: ShowLegend,
+    /// Category order for blob/cumulative plot (<cat1>,<cat2>,...)
+    #[arg(long = "cat-order")]
+    pub cat_order: Option<String>,
+    /// Origin for category lines in cumulative plot
+    #[arg(long, value_enum)]
+    pub origin: Option<Origin>,
+    /// Colour palette for categories
+    #[arg(long, value_enum)]
+    pub palette: Option<Palette>,
+    /// Individual colours to modify palette (<index>=<hexcode>)
+    #[arg(long)]
+    pub color: Option<Vec<String>>,
+}
+
+/// Valid taxonomy formats
+#[derive(ValueEnum, Parser, Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum TaxonomyFormat {
+    NCBI,
+    GBIF,
+}
+
+/// Options to pass to `blobtk taxonomy`
+#[derive(Default, Parser, Serialize, Deserialize, Clone, Debug)]
+#[pyclass]
+pub struct TaxonomyOptions {
+    /// Path to backbone taxonomy file/directory
+    #[arg(long = "taxdump", short = 't')]
+    pub path: Option<PathBuf>,
+    #[arg(long = "taxonomy-format", short = 'f')]
+    pub taxonomy_format: Option<TaxonomyFormat>,
+    /// Root taxon/taxa for filtered taxonomy
+    #[arg(long = "root-id", short = 'r')]
+    pub root_taxon_id: Option<Vec<String>>,
+    /// Base taxon for filtered taxonomy lineages
+    #[arg(long = "base-id", short = 'b')]
+    pub base_taxon_id: Option<String>,
+    // /// Path to a directory containing files to be mapped to the taxonomy
+    // #[arg(long = "data-dir", short = 'd')]
+    // pub data_dir: Option<Vec<PathBuf>>,
+    /// Path to output filtered backbone taxonomy
+    #[arg(long = "taxdump-out")]
+    pub out: Option<PathBuf>,
+    // /// Path to GBIF backbone taxonomy file (simple text)
+    // #[arg(long = "gbif-backbone", short = 'g')]
+    // pub gbif_backbone: Option<PathBuf>,
+    /// Path to YAML format config file
+    #[arg(long = "config", short = 'c')]
+    pub config_file: Option<PathBuf>,
+    /// List of name_classes to use during taxon lookup
+    #[clap(skip)]
+    #[serde(default = "default_name_classes")]
+    pub name_classes: Vec<String>,
+    /// Label to use when setting as xref
+    #[clap(skip)]
+    pub xref_label: Option<String>,
+    /// List of taxonomies to map to backbone
+    #[clap(skip)]
+    pub taxonomies: Option<Vec<TaxonomyOptions>>,
+}
+
+fn default_name_classes() -> Vec<String> {
+    vec!["scientific name".to_string()]
 }
 
 /// Command line argument parser

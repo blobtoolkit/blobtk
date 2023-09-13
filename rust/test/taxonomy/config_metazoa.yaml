@@ -1,0 +1,18 @@
+path: ~/projects/genomehubs/boat-resources/taxdump/ncbi
+out: test/taxonomy/canidae/combined
+taxonomy_format: ncbi
+root_taxon_id:
+  - 33208
+base_taxon_id: 33208
+name_classes:
+  - scientific name
+  - synonym
+taxonomies:
+  - path: ~/Downloads/backbone-simple.txt
+    taxonomy_format: gbif
+    root_taxon_id:
+      - 1
+    base_taxon_id: 1
+    name_classes:
+      - scientific name
+    xref_label: gbif

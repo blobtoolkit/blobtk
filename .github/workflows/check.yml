@@ -1,4 +1,4 @@
-name: pipeline
+name: cargo-check
 
 on:
   workflow_dispatch:
