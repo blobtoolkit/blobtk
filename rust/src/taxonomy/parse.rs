@@ -350,6 +350,18 @@ pub fn parse_gbif(gbif_backbone: PathBuf) -> Result<Nodes, anyhow::Error> {
     let mut nodes = HashMap::new();
     let mut children = HashMap::new();
 
+    nodes.insert(
+        "root".to_string(),
+        Node {
+            tax_id: "root".to_string(),
+            parent_tax_id: "root".to_string(),
+            rank: "root".to_string(),
+            scientific_name: None,
+            names: None,
+            ..Default::default()
+        },
+    );
+
     let mut rdr = ReaderBuilder::new()
         .has_headers(false)
         .delimiter(b'\t')
@@ -381,7 +393,7 @@ pub fn parse_gbif(gbif_backbone: PathBuf) -> Result<Nodes, anyhow::Error> {
         let taxon_name = record.get(19).unwrap().to_string();
         let mut parent_tax_id = record.get(1).unwrap().to_string();
         if parent_tax_id == "\\N" {
-            parent_tax_id = tax_id.clone()
+            parent_tax_id = "root".to_string()
         }
         let name = Name {
             tax_id: tax_id.clone(),
