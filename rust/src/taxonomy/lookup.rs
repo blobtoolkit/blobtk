@@ -148,7 +148,7 @@ pub fn lookup_nodes(
                     unique_name: format!("{}:{}", &label, node.tax_id()),
                     class: xref_label.clone(),
                 });
-                continue;
+                break;
             } else {
                 if let Some(hanger_id) = hanger_tax_id {
                     // Create new node and hang on hanger_tax_id
@@ -235,5 +235,4 @@ pub fn lookup_nodes(
     //         },
     //     )
     // }
-    dbg!(unmatched);
 }

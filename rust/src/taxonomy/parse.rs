@@ -5,26 +5,32 @@
 
 // println!("{}", parser(line));
 
+use std::borrow::BorrowMut;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
+use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use anyhow;
 use convert_case::{Case, Casing};
-use csv::ReaderBuilder;
+use csv::StringRecord;
+use csv::{Reader, ReaderBuilder};
 use nom::{
     bytes::complete::{tag, take_until},
     combinator::map,
     multi::separated_list0,
     IResult,
 };
-// use serde::Deserialize;
+use serde;
+use serde::{Deserialize, Serialize};
 
 use struct_iterable::Iterable;
 
+use crate::error;
 use crate::io;
 
 /// A taxon name
@@ -378,6 +384,10 @@ pub fn parse_gbif(gbif_backbone: PathBuf) -> Result<Nodes, anyhow::Error> {
     let mut ignore = HashSet::new();
     ignore.insert("DOUBTFUL");
     ignore.insert("MISAPPLIED");
+    ignore.insert("HETEROTYPIC_SYNONYM");
+    ignore.insert("HOMOTYPIC_SYNONYM");
+    ignore.insert("PROPARTE_SYNONYM");
+    ignore.insert("SYNONYM");
     for result in rdr.records() {
         let record = result?;
         let status = record.get(4).unwrap();
@@ -450,6 +460,390 @@ pub fn parse_gbif(gbif_backbone: PathBuf) -> Result<Nodes, anyhow::Error> {
         // };
     }
     Ok(Nodes { nodes, children })
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub enum GHubsFileFormat {
+    #[serde(rename = "csv")]
+    CSV,
+    #[default]
+    #[serde(rename = "tsv")]
+    TSV,
+}
+
+impl FromStr for GHubsFileFormat {
+    type Err = ();
+    fn from_str(input: &str) -> Result<GHubsFileFormat, Self::Err> {
+        match input {
+            "csv" => Ok(GHubsFileFormat::CSV),
+            "csv.gz" => Ok(GHubsFileFormat::CSV),
+            "tsv" => Ok(GHubsFileFormat::TSV),
+            "tsv.gz" => Ok(GHubsFileFormat::TSV),
+            _ => Err(()),
+        }
+    }
+}
+
+// Value may be String or Vec of Strings
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum StringOrVec {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+// Value may be u32 or Vec of u32
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum UsizeOrVec {
+    Single(usize),
+    Multiple(Vec<usize>),
+}
+
+// Value may be PathBuf or Vec of PathBuf
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PathBufOrVec {
+    Single(PathBuf),
+    Multiple(Vec<PathBuf>),
+}
+
+// Field types
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum FieldType {
+    #[serde(rename = "byte")]
+    Byte,
+    #[serde(rename = "date")]
+    Date,
+    #[serde(rename = "double")]
+    Double,
+    #[serde(rename = "float")]
+    Float,
+    #[serde(rename = "geo_point")]
+    GeoPoint,
+    #[serde(rename = "half_float")]
+    HalfFloat,
+    #[serde(rename = "keyword")]
+    Keyword,
+    #[serde(rename = "integer")]
+    Integer,
+    #[serde(rename = "long")]
+    Long,
+    #[serde(rename = "short")]
+    Short,
+    #[serde(rename = "1dp")]
+    OneDP,
+    #[serde(rename = "2dp")]
+    TwoDP,
+    #[serde(rename = "3dp")]
+    ThreeDP,
+    #[serde(rename = "4dp")]
+    FourDP,
+}
+
+/// GenomeHubs file configuration options
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+pub struct GHubsFileConfig {
+    /// File format
+    pub format: GHubsFileFormat,
+    /// Flag to indicate whether file has a header row
+    pub header: bool,
+    /// Filename or path relative to the configuration file
+    pub name: PathBuf,
+    /// Additional configuration files that must be loaded
+    pub needs: Option<PathBufOrVec>,
+}
+
+/// GenomeHubs field constraint configuration options
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+pub struct ConstraintConfig {
+    // List of valid values
+    #[serde(rename = "enum")]
+    pub enum_values: Option<Vec<String>>,
+    // Value length
+    pub len: Option<usize>,
+    // Maximum value
+    pub max: Option<usize>,
+    // Minimum value
+    pub min: Option<usize>,
+}
+
+/// GenomeHubs field configuration options
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+pub struct GHubsFieldConfig {
+    // Constrainton field values
+    pub constraint: Option<ConstraintConfig>,
+    // Default value
+    pub default: Option<String>,
+    // Function to apply to value
+    pub function: Option<String>,
+    // Column header
+    pub header: Option<StringOrVec>,
+    // Column index
+    pub index: Option<UsizeOrVec>,
+    // String to join columns
+    pub join: Option<String>,
+    // Value separator
+    pub separator: Option<StringOrVec>,
+    // List of values to translate
+    pub translate: Option<HashMap<String, String>>,
+    // Field type
+    #[serde(rename = "type")]
+    pub field_type: Option<FieldType>,
+}
+
+impl GHubsFieldConfig {
+    fn merge(self, other: GHubsFieldConfig) -> Self {
+        Self {
+            constraint: self.constraint.or(other.constraint),
+            default: self.default.or(other.default),
+            function: self.function.or(other.function),
+            header: self.header.or(other.header),
+            index: self.index.or(other.index),
+            join: self.join.or(other.join),
+            separator: self.separator.or(other.separator),
+            translate: self.translate.or(other.translate),
+            field_type: self.field_type.or(other.field_type),
+        }
+    }
+}
+
+/// Merges 2 GenomeHubs configuration files
+fn merge_attributes(
+    self_attributes: Option<HashMap<String, GHubsFieldConfig>>,
+    other_attributes: Option<HashMap<String, GHubsFieldConfig>>,
+    merged_attributes: &mut HashMap<String, GHubsFieldConfig>,
+) {
+    if let Some(attributes) = self_attributes {
+        if other_attributes.is_some() {
+            let new_attributes = other_attributes.unwrap();
+            for (field, other_config) in new_attributes.clone() {
+                if let Some(config) = attributes.get(&field) {
+                    merged_attributes.insert(field.clone(), config.clone().merge(other_config));
+                } else {
+                    merged_attributes.insert(field.clone(), other_config.clone());
+                }
+            }
+            for (field, config) in attributes {
+                if let Some(_) = new_attributes.get(&field) {
+                    continue;
+                } else {
+                    merged_attributes.insert(field.clone(), config.clone());
+                }
+            }
+        } else {
+            for (field, config) in attributes {
+                merged_attributes.insert(field.clone(), config.clone());
+            }
+        }
+    } else if let Some(attributes) = other_attributes {
+        for (field, config) in attributes {
+            merged_attributes.insert(field.clone(), config.clone());
+        }
+    }
+}
+
+/// GenomeHubs configuration options
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+pub struct GHubsConfig {
+    /// File configuration options
+    pub file: Option<GHubsFileConfig>,
+    /// Attribute fields
+    pub attributes: Option<HashMap<String, GHubsFieldConfig>>,
+    /// Taxonomy fields
+    pub taxonomy: Option<HashMap<String, GHubsFieldConfig>>,
+}
+
+impl GHubsConfig {
+    pub fn get(&self, key: &str) -> Option<&HashMap<String, GHubsFieldConfig>> {
+        match key {
+            "attributes" => self.attributes.as_ref(),
+            "taxonomy" => self.taxonomy.as_ref(),
+            _ => None,
+        }
+    }
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut HashMap<String, GHubsFieldConfig>> {
+        match key {
+            "attributes" => self.attributes.as_mut(),
+            "taxonomy" => self.taxonomy.as_mut(),
+            _ => None,
+        }
+    }
+    fn merge(self, other: GHubsConfig) -> Self {
+        let mut merged_attributes = HashMap::new();
+        let self_attributes = self.attributes;
+        let other_attributes = other.attributes;
+        merge_attributes(self_attributes, other_attributes, &mut merged_attributes);
+        let mut merged_taxonomy = HashMap::new();
+        let self_taxonomy = self.taxonomy;
+        let other_taxonomy = other.taxonomy;
+        merge_attributes(self_taxonomy, other_taxonomy, &mut merged_taxonomy);
+        Self {
+            file: self.file.or(other.file),
+            attributes: Some(merged_attributes),
+            taxonomy: Some(merged_taxonomy),
+        }
+    }
+}
+
+// Parse a GenomeHubs configuration file
+fn parse_genomehubs_config(config_file: &PathBuf) -> Result<GHubsConfig, error::Error> {
+    let reader = match io::file_reader(config_file.clone()) {
+        Some(r) => r,
+        None => {
+            return Err(error::Error::FileNotFound(format!(
+                "{}",
+                &config_file.to_str().unwrap()
+            )))
+        }
+    };
+    let mut ghubs_config: GHubsConfig = match serde_yaml::from_reader(reader) {
+        Ok(options) => options,
+        Err(err) => {
+            return Err(error::Error::SerdeError(format!(
+                "{} {}",
+                &config_file.to_str().unwrap(),
+                err.to_string()
+            )))
+        }
+    };
+    if let Some(file_config) = &ghubs_config.file {
+        if let Some(needs) = &file_config.needs {
+            let mut base_path = config_file.clone();
+            base_path.pop();
+            let needs_files = match needs {
+                PathBufOrVec::Single(file) => {
+                    base_path.push(file);
+                    vec![base_path]
+                }
+                PathBufOrVec::Multiple(files) => {
+                    let mut needs_paths = vec![];
+                    for file in files.iter() {
+                        let mut needs_path = base_path.clone();
+                        needs_path.push(file);
+                        needs_paths.push(needs_path);
+                    }
+                    needs_paths
+                }
+            };
+            for needs_file in needs_files.iter() {
+                dbg!(&needs_file);
+                let extra_config = match parse_genomehubs_config(&needs_file) {
+                    Ok(extra_config) => extra_config,
+                    Err(err) => return Err(err),
+                };
+                // TODO: combine_configs(extra_config, ghubs_config);
+                ghubs_config = extra_config.merge(ghubs_config.clone());
+            }
+        }
+    }
+    Ok(ghubs_config)
+}
+
+fn key_index(headers: &StringRecord, key: &str) -> Result<usize, error::Error> {
+    match headers.iter().position(|column| column == key) {
+        Some(index) => Ok(index),
+        None => Err(error::Error::IndexError(format!(
+            "Column '{}' does not exist.",
+            key
+        ))),
+    }
+}
+
+fn update_config(key: &str, ghubs_config: &mut GHubsConfig, headers: &StringRecord) {
+    for (field_name, field) in ghubs_config.borrow_mut().get_mut(key).unwrap().iter_mut() {
+        if field.header.is_some() {
+            // if let Some(header) = &field.header {
+            // let field_idx = &mut field.index;
+            field.index = match &field.header.as_ref().unwrap().clone() {
+                StringOrVec::Single(item) => Some(UsizeOrVec::Single(
+                    key_index(headers, item.as_str()).unwrap(),
+                )),
+                StringOrVec::Multiple(list) => Some(UsizeOrVec::Multiple(
+                    list.iter()
+                        .map(|item| key_index(headers, item.as_str()).unwrap())
+                        .collect::<Vec<usize>>(),
+                )),
+            };
+            // field.index = field_index;
+        };
+    }
+}
+
+fn validate_values(key: &str, ghubs_config: &mut GHubsConfig, record: &StringRecord) {
+    for (field_name, field) in ghubs_config.borrow_mut().get_mut(key).unwrap().iter_mut() {
+        if let Some(index) = &field.index {
+            let string_value = match index {
+                UsizeOrVec::Single(idx) => record.get(idx.to_owned()).unwrap().to_string(),
+                UsizeOrVec::Multiple(indices) => indices
+                    .iter()
+                    .map(|idx| record.get(idx.to_owned()).unwrap_or(""))
+                    .collect::<Vec<&str>>()
+                    .join(&field.join.as_ref().unwrap_or(&"".to_string())),
+            };
+
+            dbg!(&field_name, string_value);
+        }
+    }
+}
+
+// Parse taxa from a GenomeHubs data file
+fn nodes_from_file(
+    config_file: &PathBuf,
+    ghubs_config: &mut GHubsConfig,
+) -> Result<(), error::Error> {
+    let file_config = ghubs_config.file.as_ref().unwrap();
+    let delimiter = match file_config.format {
+        GHubsFileFormat::CSV => b',',
+        GHubsFileFormat::TSV => b'\t',
+    };
+    let mut path = config_file.clone();
+    path.pop();
+    path.push(file_config.name.clone());
+
+    let mut rdr = ReaderBuilder::new()
+        .has_headers(file_config.header)
+        .delimiter(delimiter)
+        .from_path(path)?;
+    let headers = rdr.headers()?;
+    let keys = vec!["attributes", "taxonomy"];
+    for key in keys.iter() {
+        if ghubs_config.get(key).is_some() {
+            update_config(key, ghubs_config, headers);
+        }
+    }
+    dbg!(&ghubs_config);
+
+    for result in rdr.records() {
+        let record = result?;
+        for key in keys.iter() {
+            if ghubs_config.get(key).is_some() {
+                validate_values(key, ghubs_config, &record);
+            }
+        }
+        // let status = record.get(4).unwrap();
+        // dbg!(record);
+    }
+    Ok(())
+}
+
+pub fn parse_file(config_file: PathBuf) -> Result<(), error::Error> {
+    // let mut children = HashMap::new();
+
+    let mut nodes;
+
+    let mut ghubs_config = match parse_genomehubs_config(&config_file) {
+        Ok(ghubs_config) => ghubs_config,
+        Err(err) => return Err(err),
+    };
+    nodes = nodes_from_file(&config_file, &mut ghubs_config);
+
+    // let mut rdr = ReaderBuilder::new()
+    //     .has_headers(false)
+    //     .delimiter(b'\t')
+    //     .from_path(gbif_backbone)?;
+
+    Ok(())
 }
 
 #[cfg(test)]

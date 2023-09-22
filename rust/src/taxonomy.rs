@@ -3,14 +3,12 @@
 //! `blobtk taxonomy <args>`
 
 use anyhow;
-use flate2::read::GzDecoder;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+
 // use std::time::{Duration, Instant};
 
 use crate::cli;
 use crate::error;
+use crate::io;
 
 /// Functions for ncbi taxonomy processing.
 pub mod parse;
@@ -24,6 +22,7 @@ pub use parse::{parse_taxdump, write_taxdump};
 
 pub use lookup::lookup_nodes;
 
+use self::parse::parse_file;
 use self::parse::{parse_gbif, Nodes};
 
 // use std::error::Error;
@@ -38,19 +37,9 @@ use self::parse::{parse_gbif, Nodes};
 //     Ok(())
 // }
 
-pub fn file_reader(path: PathBuf) -> Option<Box<dyn BufRead>> {
-    let file = File::open(&path).expect("no such file");
-
-    if path.ends_with(".gz") {
-        return Some(Box::new(BufReader::new(GzDecoder::new(file))));
-    } else {
-        return Some(Box::new(BufReader::new(file)));
-    };
-}
-
 fn load_options(options: &cli::TaxonomyOptions) -> Result<cli::TaxonomyOptions, error::Error> {
     if let Some(config_file) = options.config_file.clone() {
-        let reader = match file_reader(config_file.clone()) {
+        let reader = match io::file_reader(config_file.clone()) {
             Some(r) => r,
             None => {
                 return Err(error::Error::FileNotFound(format!(
@@ -100,6 +89,11 @@ fn load_options(options: &cli::TaxonomyOptions) -> Result<cli::TaxonomyOptions, 
                 options.name_classes.clone()
             },
             taxonomies: taxonomy_options.taxonomies.clone(),
+            genomehubs_files: match taxonomy_options.genomehubs_files {
+                Some(genomehubs_files) => Some(genomehubs_files),
+                None => options.genomehubs_files.clone(),
+            },
+
             ..Default::default()
         });
     }
@@ -156,6 +150,13 @@ pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), anyhow::Error> {
                 &options.name_classes,
                 taxonomy.xref_label.clone(),
             );
+        }
+    }
+
+    if let Some(genomehubs_files) = options.genomehubs_files.clone() {
+        for genomehubs_file in genomehubs_files {
+            // match taxa to nodes
+            let names = parse_file(genomehubs_file).unwrap();
         }
     }
 

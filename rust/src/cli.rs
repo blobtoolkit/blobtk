@@ -317,6 +317,9 @@ pub struct TaxonomyOptions {
     /// List of taxonomies to map to backbone
     #[clap(skip)]
     pub taxonomies: Option<Vec<TaxonomyOptions>>,
+    /// Files to match to taxIDs
+    #[arg(long = "genomehubs_files", short = 'g')]
+    pub genomehubs_files: Option<Vec<PathBuf>>,
 }
 
 fn default_name_classes() -> Vec<String> {
