@@ -17,6 +17,7 @@ use std::str::FromStr;
 
 use anyhow;
 use convert_case::{Case, Casing};
+use cpc::{eval, units::Unit};
 use csv::StringRecord;
 use csv::{Reader, ReaderBuilder};
 use nom::{
@@ -25,13 +26,17 @@ use nom::{
     multi::separated_list0,
     IResult,
 };
+use regex::Regex;
 use serde;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use struct_iterable::Iterable;
 
 use crate::error;
 use crate::io;
+
+use super::lookup::build_lineage_lookup;
+use super::lookup::build_lookup;
 
 /// A taxon name
 #[derive(Clone, Debug, Default, Eq, Iterable, Ord, PartialEq, PartialOrd)]
@@ -563,9 +568,9 @@ pub struct ConstraintConfig {
     // Value length
     pub len: Option<usize>,
     // Maximum value
-    pub max: Option<usize>,
+    pub max: Option<f64>,
     // Minimum value
-    pub min: Option<usize>,
+    pub min: Option<f64>,
 }
 
 /// GenomeHubs field configuration options
@@ -586,7 +591,7 @@ pub struct GHubsFieldConfig {
     // Value separator
     pub separator: Option<StringOrVec>,
     // List of values to translate
-    pub translate: Option<HashMap<String, String>>,
+    pub translate: Option<HashMap<String, StringOrVec>>,
     // Field type
     #[serde(rename = "type")]
     pub field_type: Option<FieldType>,
@@ -727,7 +732,6 @@ fn parse_genomehubs_config(config_file: &PathBuf) -> Result<GHubsConfig, error::
                 }
             };
             for needs_file in needs_files.iter() {
-                dbg!(&needs_file);
                 let extra_config = match parse_genomehubs_config(&needs_file) {
                     Ok(extra_config) => extra_config,
                     Err(err) => return Err(err),
@@ -770,6 +774,153 @@ fn update_config(key: &str, ghubs_config: &mut GHubsConfig, headers: &StringReco
     }
 }
 
+fn check_bounds<T: Into<f64> + Copy>(value: &T, constraint: &ConstraintConfig) -> bool {
+    let val: f64 = Into::<f64>::into(value.to_owned());
+    if let Some(min) = constraint.min {
+        if val < min {
+            eprintln!("Value {} is less than minimum {}", val, min);
+            return false;
+        }
+    }
+    if let Some(max) = constraint.max {
+        if val > max {
+            eprintln!("Value {} is greater than maximum {}", val, max);
+            return false;
+        }
+    }
+    true
+}
+
+fn apply_constraint(value: &mut GHubsConfig, constraint: &ConstraintConfig) {}
+
+fn validate_double(value: &String, constraint: &ConstraintConfig) -> Result<bool, error::Error> {
+    let v = value
+        .parse::<f64>()
+        .map_err(|_| error::Error::ParseError(format!("Invalid double value: {}", value)))?;
+    Ok(check_bounds(&v, constraint))
+}
+
+fn apply_validation(value: String, field: &GHubsFieldConfig) -> Result<String, error::Error> {
+    let constraint = match field.constraint.to_owned() {
+        Some(c) => c,
+        None => ConstraintConfig {
+            ..Default::default()
+        },
+    };
+    if let Some(ref field_type) = field.field_type {
+        let valid = match field_type {
+            FieldType::Byte => {
+                let dot_pos = value.find(".").unwrap_or(value.len());
+                let v = value[..dot_pos].parse::<i8>().map_err(|_| {
+                    error::Error::ParseError(format!("Invalid byte value: {}", value))
+                })?;
+                check_bounds(&v, &constraint)
+            }
+            FieldType::Date => true,
+            FieldType::Double => validate_double(&value, &constraint)?,
+
+            FieldType::Float => {
+                let v = value.parse::<f32>().map_err(|_| {
+                    error::Error::ParseError(format!("Invalid float value: {}", value))
+                })?;
+                check_bounds(&v, &constraint)
+            }
+            FieldType::GeoPoint => true,
+            FieldType::HalfFloat => {
+                let v = value.parse::<f32>().map_err(|_| {
+                    error::Error::ParseError(format!("Invalid half_float value: {}", value))
+                })?;
+                check_bounds(&v, &constraint)
+            }
+            FieldType::Keyword => true,
+            FieldType::Integer => {
+                let dot_pos = value.find(".").unwrap_or(value.len());
+                let v = value[..dot_pos].parse::<i32>().map_err(|_| {
+                    error::Error::ParseError(format!("Invalid integer value: {}", value))
+                })?;
+                check_bounds(&v, &constraint)
+            }
+            FieldType::Long => {
+                let dot_pos = value.find(".").unwrap_or(value.len());
+                value[..dot_pos].parse::<i64>().map_err(|_| {
+                    error::Error::ParseError(format!("Invalid long value: {}", value))
+                })?;
+                validate_double(&value, &constraint)?
+            }
+            FieldType::Short => {
+                let dot_pos = value.find(".").unwrap_or(value.len());
+                let v = value[..dot_pos].parse::<i16>().map_err(|_| {
+                    error::Error::ParseError(format!("Invalid short value: {}", value))
+                })?;
+                check_bounds(&v, &constraint)
+            }
+            FieldType::OneDP => true,
+            FieldType::TwoDP => true,
+            FieldType::ThreeDP => true,
+            FieldType::FourDP => true,
+        };
+    }
+    Ok(value)
+}
+
+fn apply_function(value: String, field: &GHubsFieldConfig) -> String {
+    if value == "" {
+        return "None".to_string();
+    }
+    let mut val = value;
+    if let Some(ref function) = field.function {
+        let equation = function.replace("{}", val.as_str());
+        let value = eval(equation.as_str(), false, Unit::NoUnit, false).unwrap();
+        val = format!("{}", value);
+    }
+    apply_validation(val, &field).unwrap_or("None".to_string())
+}
+
+fn translate_value(field: &GHubsFieldConfig, value: &String) -> Vec<String> {
+    let mut values = vec![];
+    // dbg!(&field.header, &value);
+    if let Some(ref translate) = field.translate {
+        let translated = translate
+            .get(value)
+            .cloned()
+            .unwrap_or(StringOrVec::Single(value.to_owned()));
+        match translated {
+            StringOrVec::Single(val) => values.push(val),
+            StringOrVec::Multiple(vals) => values.extend(vals),
+        };
+    } else {
+        values.push(value.to_owned());
+    }
+    values
+}
+
+fn process_value(value: String, field: &GHubsFieldConfig) -> Result<Vec<String>, error::Error> {
+    let values = translate_value(field, &value);
+    let mut ret_values = vec![];
+    for value in values {
+        if let Some(separator) = &field.separator {
+            let re = match separator {
+                StringOrVec::Single(sep) => Regex::new(sep).unwrap(),
+                StringOrVec::Multiple(separators) => Regex::new(
+                    separators
+                        // .iter()
+                        // .map(|sep| record.get(idx.to_owned()).unwrap_or(""))
+                        // .collect::<Vec<&str>>()
+                        .join(&"|")
+                        .as_str(),
+                )
+                .unwrap(),
+            };
+            for val in re.split(value.as_str()) {
+                ret_values.push(apply_function(val.to_string(), &field));
+            }
+        } else {
+            ret_values.push(apply_function(value, &field));
+        }
+    }
+    Ok(ret_values)
+}
+
 fn validate_values(key: &str, ghubs_config: &mut GHubsConfig, record: &StringRecord) {
     for (field_name, field) in ghubs_config.borrow_mut().get_mut(key).unwrap().iter_mut() {
         if let Some(index) = &field.index {
@@ -781,8 +932,7 @@ fn validate_values(key: &str, ghubs_config: &mut GHubsConfig, record: &StringRec
                     .collect::<Vec<&str>>()
                     .join(&field.join.as_ref().unwrap_or(&"".to_string())),
             };
-
-            dbg!(&field_name, string_value);
+            let values = process_value(string_value, field).unwrap();
         }
     }
 }
@@ -812,7 +962,7 @@ fn nodes_from_file(
             update_config(key, ghubs_config, headers);
         }
     }
-    dbg!(&ghubs_config);
+    // dbg!(&ghubs_config);
 
     for result in rdr.records() {
         let record = result?;
@@ -844,6 +994,119 @@ pub fn parse_file(config_file: PathBuf) -> Result<(), error::Error> {
     //     .from_path(gbif_backbone)?;
 
     Ok(())
+}
+
+/// Deserializer for lineage
+fn lineage_deserialize<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let str_sequence = String::deserialize(deserializer)?;
+    Ok(str_sequence
+        .split(';')
+        .map(|item| item.trim().to_owned())
+        .collect())
+}
+
+/// ENA taxonomy record from taxonomy API
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+pub struct EnaTaxon {
+    // Unique taxon ID
+    #[serde(rename = "taxId")]
+    pub tax_id: String,
+    // Scientific name
+    #[serde(rename = "scientificName")]
+    pub scientific_name: String,
+    // Taxonomic rank
+    pub rank: String,
+    // Lineage
+    // pub lineage: String,
+    #[serde(deserialize_with = "lineage_deserialize")]
+    pub lineage: Vec<String>,
+}
+
+pub fn parse_ena_jsonl(
+    jsonl: PathBuf,
+    existing: Option<&mut Nodes>,
+) -> Result<Nodes, error::Error> {
+    let mut nodes = HashMap::new();
+    let mut children = HashMap::new();
+    let name_classes = vec!["scientific name".to_string()];
+    if let Some(existing_nodes) = existing {
+        let table = build_lookup(existing_nodes, &name_classes, false);
+
+        let lines = match io::read_lines(&jsonl) {
+            Ok(r) => r,
+            Err(_) => {
+                return Err(error::Error::FileNotFound(format!(
+                    "{:?}",
+                    &jsonl.as_os_str()
+                )))
+            }
+        };
+
+        for line in lines {
+            if let Ok(json) = line {
+                let taxon: EnaTaxon = serde_json::from_str(&json)?;
+                let scientific_name = taxon.scientific_name;
+                for names in taxon
+                    .lineage
+                    .into_iter()
+                    .rev()
+                    .collect::<Vec<String>>()
+                    .windows(2)
+                {
+                    let key = format!(
+                        "{}:{}",
+                        names[0].to_case(Case::Lower),
+                        names[1].to_case(Case::Lower)
+                    );
+                    if let Some(parent_tax_ids) = table.get(&key) {
+                        if parent_tax_ids.len() == 1 {
+                            let node = Node {
+                                tax_id: taxon.tax_id.clone(),
+                                parent_tax_id: parent_tax_ids[0].clone(),
+                                rank: taxon.rank,
+                                scientific_name: Some(scientific_name.clone()),
+                                names: Some(vec![Name {
+                                    tax_id: taxon.tax_id.clone(),
+                                    name: scientific_name,
+                                    class: Some("scientific name".to_string()),
+                                    ..Default::default()
+                                }]),
+                            };
+                            existing_nodes.nodes.insert(taxon.tax_id.clone(), node);
+                            match existing_nodes.children.entry(parent_tax_ids[0].clone()) {
+                                Entry::Vacant(e) => {
+                                    e.insert(vec![taxon.tax_id]);
+                                }
+                                Entry::Occupied(mut e) => {
+                                    e.get_mut().push(taxon.tax_id);
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                // if let Some((parent_tax_id, parent_node)) = table.get_key_value(&taxon.lineage) {
+                //     dbg!(parent_tax_id);
+                // }
+
+                // dbg!(taxon);
+            }
+        }
+    }
+
+    // Status can be:
+    // ACCEPTED
+    // DOUBTFUL
+    // HETEROTYPIC_SYNONYM
+    // HOMOTYPIC_SYNONYM
+    // MISAPPLIED
+    // PROPARTE_SYNONYM
+    // SYNONYM
+
+    Ok(Nodes { nodes, children })
 }
 
 #[cfg(test)]

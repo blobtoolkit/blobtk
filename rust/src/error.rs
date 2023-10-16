@@ -5,6 +5,8 @@ use thiserror;
 pub enum Error {
     #[error("{0}")]
     Generic(String),
+    #[error("{0}")]
+    ParseError(String),
     #[error("Parameter not defined: {0}")]
     NotDefined(String),
     #[error("Plot axis not defined: {0}")]

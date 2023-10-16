@@ -2,7 +2,9 @@ file:
   format: tsv
   header: true
   name: apidae.tsv
-  needs: ATTR_karyotype.types.yaml
+  needs:
+    - ATTR_genome_size.types.yaml
+    - ATTR_karyotype.types.yaml
   source: Bee Chromosome Database
   source_date: 2023-05-30
   source_url: http://www.bees.ufop.br

@@ -276,8 +276,12 @@ pub struct PlotOptions {
 #[derive(ValueEnum, Parser, Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum TaxonomyFormat {
+    /// NCBI taxdump containing nodes.dmp and names.dmp
     NCBI,
+    /// GBIF simple format backbone taxonomy
     GBIF,
+    /// ENA taxonomy record formatted as JSONL
+    ENA,
 }
 
 /// Options to pass to `blobtk taxonomy`
@@ -317,6 +321,10 @@ pub struct TaxonomyOptions {
     /// List of taxonomies to map to backbone
     #[clap(skip)]
     pub taxonomies: Option<Vec<TaxonomyOptions>>,
+    /// Flag to create missing taxa if higher rank matches
+    #[clap(skip)]
+    #[serde(default = "default_create_taxa")]
+    pub create_taxa: bool,
     /// Files to match to taxIDs
     #[arg(long = "genomehubs_files", short = 'g')]
     pub genomehubs_files: Option<Vec<PathBuf>>,
@@ -324,6 +332,10 @@ pub struct TaxonomyOptions {
 
 fn default_name_classes() -> Vec<String> {
     vec!["scientific name".to_string()]
+}
+
+fn default_create_taxa() -> bool {
+    false
 }
 
 /// Command line argument parser

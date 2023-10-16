@@ -18,12 +18,9 @@ pub mod lookup;
 
 pub use cli::TaxonomyOptions;
 
-pub use parse::{parse_taxdump, write_taxdump};
-
 pub use lookup::lookup_nodes;
 
-use self::parse::parse_file;
-use self::parse::{parse_gbif, Nodes};
+use self::parse::{parse_ena_jsonl, parse_file, parse_gbif, parse_taxdump, write_taxdump, Nodes};
 
 // use std::error::Error;
 // use csv::Reader;
@@ -88,6 +85,7 @@ fn load_options(options: &cli::TaxonomyOptions) -> Result<cli::TaxonomyOptions, 
             } else {
                 options.name_classes.clone()
             },
+            create_taxa: taxonomy_options.create_taxa.clone(),
             taxonomies: taxonomy_options.taxonomies.clone(),
             genomehubs_files: match taxonomy_options.genomehubs_files {
                 Some(genomehubs_files) => Some(genomehubs_files),
@@ -100,13 +98,17 @@ fn load_options(options: &cli::TaxonomyOptions) -> Result<cli::TaxonomyOptions, 
     Ok(options.clone())
 }
 
-fn taxdump_to_nodes(options: &cli::TaxonomyOptions) -> Result<Nodes, error::Error> {
+fn taxdump_to_nodes(
+    options: &cli::TaxonomyOptions,
+    existing: Option<&mut Nodes>,
+) -> Result<Nodes, error::Error> {
     let options = load_options(&options)?;
     let nodes;
     if let Some(taxdump) = options.path.clone() {
         nodes = match options.taxonomy_format {
             Some(cli::TaxonomyFormat::NCBI) => parse_taxdump(taxdump).unwrap(),
             Some(cli::TaxonomyFormat::GBIF) => parse_gbif(taxdump).unwrap(),
+            Some(cli::TaxonomyFormat::ENA) => parse_ena_jsonl(taxdump, existing).unwrap(),
             None => {
                 return Err(error::Error::FileNotFound(format!(
                     "{}",
@@ -123,7 +125,7 @@ fn taxdump_to_nodes(options: &cli::TaxonomyOptions) -> Result<Nodes, error::Erro
 /// Execute the `taxonomy` subcommand from `blobtk`.
 pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), anyhow::Error> {
     let options = load_options(&options)?;
-    let mut nodes = taxdump_to_nodes(&options).unwrap();
+    let mut nodes = taxdump_to_nodes(&options, None).unwrap();
     // if let Some(taxdump) = options.path.clone() {
     //     nodes = match options.taxonomy_format {
     //         Some(cli::TaxonomyFormat::NCBI) => parse_taxdump(taxdump)?,
@@ -141,15 +143,21 @@ pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), anyhow::Error> {
 
     if let Some(taxonomies) = options.taxonomies.clone() {
         for taxonomy in taxonomies {
-            let new_nodes = taxdump_to_nodes(&taxonomy).unwrap();
+            let new_nodes = taxdump_to_nodes(&taxonomy, Some(&mut nodes)).unwrap();
             // match new_nodes to nodes
-            lookup_nodes(
-                &new_nodes,
-                &mut nodes,
-                &taxonomy.name_classes,
-                &options.name_classes,
-                taxonomy.xref_label.clone(),
-            );
+            if let Some(taxonomy_format) = taxonomy.taxonomy_format {
+                if matches!(taxonomy_format, cli::TaxonomyFormat::ENA) {
+                    continue;
+                }
+                lookup_nodes(
+                    &new_nodes,
+                    &mut nodes,
+                    &taxonomy.name_classes,
+                    &options.name_classes,
+                    taxonomy.xref_label.clone(),
+                    taxonomy.create_taxa,
+                );
+            }
         }
     }
 
