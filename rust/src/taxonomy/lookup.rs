@@ -6,7 +6,11 @@ use crate::{taxonomy::parse, utils::styled_progress_bar};
 
 use parse::Nodes;
 
-pub fn build_lookup(nodes: &Nodes, name_classes: &Vec<String>) -> HashMap<String, Vec<String>> {
+pub fn build_lookup(
+    nodes: &Nodes,
+    name_classes: &Vec<String>,
+    rank_letter: bool,
+) -> HashMap<String, Vec<String>> {
     let ranks = [
         "subspecies",
         "species",
@@ -35,13 +39,16 @@ pub fn build_lookup(nodes: &Nodes, name_classes: &Vec<String>) -> HashMap<String
                 for name in names.iter() {
                     for n_name in n_names.iter() {
                         if higher_rank_set.contains(n.rank.as_str()) {
-                            let key = format!(
-                                "{}:{}:{}:{}",
-                                node.rank_letter(),
-                                name,
-                                n.rank_letter(),
-                                n_name
-                            );
+                            let key = match rank_letter {
+                                true => format!(
+                                    "{}:{}:{}:{}",
+                                    node.rank_letter(),
+                                    name,
+                                    n.rank_letter(),
+                                    n_name
+                                ),
+                                false => format!("{}:{}", name, n_name),
+                            };
                             match table.entry(key) {
                                 Entry::Vacant(e) => {
                                     e.insert(vec![node.tax_id()]);
@@ -60,14 +67,36 @@ pub fn build_lookup(nodes: &Nodes, name_classes: &Vec<String>) -> HashMap<String
     table
 }
 
+pub fn build_lineage_lookup(nodes: &Nodes, root_id: &String) -> HashMap<String, String> {
+    let node_count = nodes.nodes.len();
+    let progress_bar = styled_progress_bar(node_count, "Building lookup hash");
+    let mut table = HashMap::new();
+
+    for (tax_id, node) in nodes.nodes.iter() {
+        progress_bar.inc(1);
+        let lineage = nodes.lineage(root_id, tax_id);
+        let s: String = lineage
+            .iter()
+            .map(|node| node.scientific_name())
+            .collect::<Vec<String>>()
+            .join("; ");
+        let lineage_string = format!("{}; {}; ", s, node.scientific_name());
+        table.insert(lineage_string, tax_id.clone());
+    }
+    progress_bar.finish();
+    dbg!(&table);
+    table
+}
+
 pub fn lookup_nodes(
     new_nodes: &Nodes,
     nodes: &mut Nodes,
     new_name_classes: &Vec<String>,
     name_classes: &Vec<String>,
     xref_label: Option<String>,
+    create_taxa: bool,
 ) {
-    let mut table = build_lookup(&nodes, &name_classes);
+    let mut table = build_lookup(&nodes, &name_classes, true);
     let ranks = [
         "subspecies",
         "species",
@@ -148,8 +177,8 @@ pub fn lookup_nodes(
                     unique_name: format!("{}:{}", &label, node.tax_id()),
                     class: xref_label.clone(),
                 });
-                continue;
-            } else {
+                break;
+            } else if create_taxa {
                 if let Some(hanger_id) = hanger_tax_id {
                     // Create new node and hang on hanger_tax_id
                     let new_tax_id = match xref_label {
@@ -235,5 +264,4 @@ pub fn lookup_nodes(
     //         },
     //     )
     // }
-    dbg!(unmatched);
 }

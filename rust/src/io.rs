@@ -1,10 +1,10 @@
 extern crate atty;
 use std::collections::HashSet;
-use std::io::{self, BufRead, BufWriter, Result, Write};
+use std::fs::{create_dir_all, File};
+use std::io::{self, BufRead, BufReader, BufWriter, Result, Write};
 use std::path::{Path, PathBuf};
 
-use std::fs::{create_dir_all, File};
-
+use flate2::read::GzDecoder;
 use flate2::write;
 use flate2::Compression;
 use std::ffi::OsStr;
@@ -98,4 +98,14 @@ pub fn append_to_path(p: &PathBuf, s: &str) -> PathBuf {
     let mut p = p.clone().into_os_string();
     p.push(s);
     p.into()
+}
+
+pub fn file_reader(path: PathBuf) -> Option<Box<dyn BufRead>> {
+    let file = File::open(&path).expect("no such file");
+
+    if path.ends_with(".gz") {
+        return Some(Box::new(BufReader::new(GzDecoder::new(file))));
+    } else {
+        return Some(Box::new(BufReader::new(file)));
+    };
 }
