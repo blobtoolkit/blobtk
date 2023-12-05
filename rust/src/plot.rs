@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow;
+use pyo3::pyclass;
 
 use crate::blobdir;
 use crate::cli;
@@ -94,12 +95,26 @@ impl FromStr for Suffix {
 }
 
 #[derive(ValueEnum, Clone, Debug, Default)]
+#[pyclass]
 pub enum ShowLegend {
     #[default]
     Default,
     Full,
     Compact,
     None,
+}
+
+impl FromStr for ShowLegend {
+    type Err = ();
+    fn from_str(input: &str) -> Result<ShowLegend, Self::Err> {
+        match input {
+            "default" => Ok(ShowLegend::Default),
+            "full" => Ok(ShowLegend::Full),
+            "compact" => Ok(ShowLegend::Compact),
+            "none" => Ok(ShowLegend::None),
+            _ => Ok(ShowLegend::Default),
+        }
+    }
 }
 
 /// Make a snail plot

@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::str::FromStr;
 // use std::str::FromStr;
 // use std::string::ParseError;
 
@@ -168,6 +169,7 @@ pub struct FilterOptions {
 }
 
 #[derive(ValueEnum, Clone, Debug, Default)]
+#[pyclass]
 pub enum View {
     #[default]
     Blob,
@@ -176,18 +178,57 @@ pub enum View {
     Snail,
 }
 
+impl FromStr for View {
+    type Err = ();
+    fn from_str(input: &str) -> Result<View, Self::Err> {
+        match input {
+            "blob" => Ok(View::Blob),
+            "cumulative" => Ok(View::Cumulative),
+            "legend" => Ok(View::Legend),
+            "snail" => Ok(View::Snail),
+            _ => Ok(View::Blob),
+        }
+    }
+}
+
 #[derive(ValueEnum, Clone, Debug)]
+#[pyclass]
 pub enum Origin {
     O,
     X,
     Y,
 }
 
+impl FromStr for Origin {
+    type Err = ();
+    fn from_str(input: &str) -> Result<Origin, Self::Err> {
+        match input {
+            "o" => Ok(Origin::O),
+            "x" => Ok(Origin::X),
+            "y" => Ok(Origin::Y),
+            _ => Ok(Origin::O),
+        }
+    }
+}
+
 #[derive(ValueEnum, Clone, Debug)]
+#[pyclass]
 pub enum Palette {
     Default,
     Inverse,
     Viridis,
+}
+
+impl FromStr for Palette {
+    type Err = ();
+    fn from_str(input: &str) -> Result<Palette, Self::Err> {
+        match input {
+            "default" => Ok(Palette::Default),
+            "inverse" => Ok(Palette::Inverse),
+            "viridis" => Ok(Palette::Viridis),
+            _ => Err(()),
+        }
+    }
 }
 
 fn less_than_5(s: &str) -> Result<f64, String> {
