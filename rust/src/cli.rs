@@ -325,7 +325,7 @@ pub struct TaxonomyOptions {
     #[clap(skip)]
     #[serde(default = "default_create_taxa")]
     pub create_taxa: bool,
-    /// Files to match to taxIDs
+    /// Files to match to taxIDs - Experimental
     #[arg(long = "genomehubs_files", short = 'g')]
     pub genomehubs_files: Option<Vec<PathBuf>>,
 }

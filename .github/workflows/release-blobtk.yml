@@ -106,6 +106,7 @@ jobs:
           - "3.9"
           - "3.10"
           - "3.11"
+          - "3.12"
         target:
           - x86_64 # , x86, aarch64, armv7, s390x, ppc64le]
     steps:

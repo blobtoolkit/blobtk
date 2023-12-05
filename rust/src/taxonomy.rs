@@ -18,7 +18,7 @@ pub mod lookup;
 
 pub use cli::TaxonomyOptions;
 
-pub use lookup::lookup_nodes;
+pub use lookup::{build_lookup, lookup_nodes};
 
 use self::parse::{parse_ena_jsonl, parse_file, parse_gbif, parse_taxdump, write_taxdump, Nodes};
 
@@ -162,9 +162,10 @@ pub fn taxonomy(options: &cli::TaxonomyOptions) -> Result<(), anyhow::Error> {
     }
 
     if let Some(genomehubs_files) = options.genomehubs_files.clone() {
+        let table = build_lookup(&nodes, &options.name_classes, false);
         for genomehubs_file in genomehubs_files {
             // match taxa to nodes
-            let names = parse_file(genomehubs_file).unwrap();
+            let names = parse_file(genomehubs_file, &table).unwrap();
         }
     }
 

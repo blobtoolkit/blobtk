@@ -514,7 +514,7 @@ pub enum PathBufOrVec {
 }
 
 // Field types
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum FieldType {
     #[serde(rename = "byte")]
     Byte,
@@ -528,6 +528,7 @@ pub enum FieldType {
     GeoPoint,
     #[serde(rename = "half_float")]
     HalfFloat,
+    #[default]
     #[serde(rename = "keyword")]
     Keyword,
     #[serde(rename = "integer")]
@@ -573,13 +574,68 @@ pub struct ConstraintConfig {
     pub min: Option<f64>,
 }
 
+// Field types
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+pub enum FieldScale {
+    #[default]
+    #[serde(rename = "linear")]
+    Linear,
+    #[serde(rename = "log2")]
+    Log2,
+    #[serde(rename = "log10")]
+    Log10,
+    #[serde(rename = "double")]
+    SQRT,
+}
+
+/// GenomeHubs value bins configuration options
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+pub struct BinsConfig {
+    // List of valid values
+    pub count: u32,
+    // Geographic resolution (hexagonal)
+    pub h3res: Option<u8>,
+    // Maximum value
+    pub max: f64,
+    // Minimum value
+    pub min: f64,
+    // Value length
+    pub scale: FieldScale,
+}
+
+/// GenomeHubs field display configuration options
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+pub struct DisplayConfig {
+    // Display group
+    pub group: Option<String>,
+    // Display level
+    pub level: Option<u8>,
+    // Displa name
+    pub name: Option<String>,
+}
+
+/// GenomeHubs field status values
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+pub enum FieldStatus {
+    // Temporary
+    #[default]
+    #[serde(rename = "temporary")]
+    Temporary,
+}
+
 /// GenomeHubs field configuration options
 #[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct GHubsFieldConfig {
-    // Constrainton field values
+    // Default settings for value bins
+    pub bins: Option<BinsConfig>,
+    // Constraint on field values
     pub constraint: Option<ConstraintConfig>,
     // Default value
     pub default: Option<String>,
+    // Field description
+    pub description: Option<String>,
+    // Display options
+    pub display: Option<DisplayConfig>,
     // Function to apply to value
     pub function: Option<String>,
     // Column header
@@ -588,27 +644,54 @@ pub struct GHubsFieldConfig {
     pub index: Option<UsizeOrVec>,
     // String to join columns
     pub join: Option<String>,
+    // Attribute key
+    pub key: Option<String>,
+    // Attribute name
+    pub name: Option<String>,
     // Value separator
     pub separator: Option<StringOrVec>,
+    // Attribute status
+    pub status: Option<FieldStatus>,
+    // Attribute summary functions
+    pub summary: Option<StringOrVec>,
+    // Attribute name synonyms
+    #[serde(alias = "synonym")]
+    pub synonyms: Option<StringOrVec>,
     // List of values to translate
     pub translate: Option<HashMap<String, StringOrVec>>,
     // Field type
-    #[serde(rename = "type")]
-    pub field_type: Option<FieldType>,
+    #[serde(rename = "type", default = "default_field_type")]
+    pub field_type: FieldType,
+    // Attribute value units
+    #[serde(alias = "unit")]
+    pub units: Option<String>,
+}
+
+fn default_field_type() -> FieldType {
+    FieldType::Keyword
 }
 
 impl GHubsFieldConfig {
     fn merge(self, other: GHubsFieldConfig) -> Self {
         Self {
+            bins: self.bins.or(other.bins),
             constraint: self.constraint.or(other.constraint),
             default: self.default.or(other.default),
+            description: self.description.or(other.description),
+            display: self.display.or(other.display),
             function: self.function.or(other.function),
             header: self.header.or(other.header),
             index: self.index.or(other.index),
             join: self.join.or(other.join),
+            key: self.key.or(other.key),
+            name: self.name.or(other.name),
             separator: self.separator.or(other.separator),
+            status: self.status.or(other.status),
+            summary: self.summary.or(other.summary),
+            synonyms: self.synonyms.or(other.synonyms),
             translate: self.translate.or(other.translate),
-            field_type: self.field_type.or(other.field_type),
+            field_type: self.field_type,
+            units: self.units.or(other.units),
         }
     }
 }
@@ -800,67 +883,68 @@ fn validate_double(value: &String, constraint: &ConstraintConfig) -> Result<bool
     Ok(check_bounds(&v, constraint))
 }
 
-fn apply_validation(value: String, field: &GHubsFieldConfig) -> Result<String, error::Error> {
+fn apply_validation(value: String, field: &GHubsFieldConfig) -> Result<bool, error::Error> {
     let constraint = match field.constraint.to_owned() {
         Some(c) => c,
         None => ConstraintConfig {
             ..Default::default()
         },
     };
-    if let Some(ref field_type) = field.field_type {
-        let valid = match field_type {
-            FieldType::Byte => {
-                let dot_pos = value.find(".").unwrap_or(value.len());
-                let v = value[..dot_pos].parse::<i8>().map_err(|_| {
-                    error::Error::ParseError(format!("Invalid byte value: {}", value))
-                })?;
-                check_bounds(&v, &constraint)
-            }
-            FieldType::Date => true,
-            FieldType::Double => validate_double(&value, &constraint)?,
+    let mut valid = false;
+    dbg!(&field);
+    let ref field_type = field.field_type;
+    valid = match field_type {
+        FieldType::Byte => {
+            let dot_pos = value.find(".").unwrap_or(value.len());
+            let v = value[..dot_pos]
+                .parse::<i8>()
+                .map_err(|_| error::Error::ParseError(format!("Invalid byte value: {}", value)))?;
+            check_bounds(&v, &constraint)
+        }
+        FieldType::Date => true,
+        FieldType::Double => validate_double(&value, &constraint)?,
 
-            FieldType::Float => {
-                let v = value.parse::<f32>().map_err(|_| {
-                    error::Error::ParseError(format!("Invalid float value: {}", value))
-                })?;
-                check_bounds(&v, &constraint)
-            }
-            FieldType::GeoPoint => true,
-            FieldType::HalfFloat => {
-                let v = value.parse::<f32>().map_err(|_| {
-                    error::Error::ParseError(format!("Invalid half_float value: {}", value))
-                })?;
-                check_bounds(&v, &constraint)
-            }
-            FieldType::Keyword => true,
-            FieldType::Integer => {
-                let dot_pos = value.find(".").unwrap_or(value.len());
-                let v = value[..dot_pos].parse::<i32>().map_err(|_| {
-                    error::Error::ParseError(format!("Invalid integer value: {}", value))
-                })?;
-                check_bounds(&v, &constraint)
-            }
-            FieldType::Long => {
-                let dot_pos = value.find(".").unwrap_or(value.len());
-                value[..dot_pos].parse::<i64>().map_err(|_| {
-                    error::Error::ParseError(format!("Invalid long value: {}", value))
-                })?;
-                validate_double(&value, &constraint)?
-            }
-            FieldType::Short => {
-                let dot_pos = value.find(".").unwrap_or(value.len());
-                let v = value[..dot_pos].parse::<i16>().map_err(|_| {
-                    error::Error::ParseError(format!("Invalid short value: {}", value))
-                })?;
-                check_bounds(&v, &constraint)
-            }
-            FieldType::OneDP => true,
-            FieldType::TwoDP => true,
-            FieldType::ThreeDP => true,
-            FieldType::FourDP => true,
-        };
-    }
-    Ok(value)
+        FieldType::Float => {
+            let v = value
+                .parse::<f32>()
+                .map_err(|_| error::Error::ParseError(format!("Invalid float value: {}", value)))?;
+            check_bounds(&v, &constraint)
+        }
+        FieldType::GeoPoint => true,
+        FieldType::HalfFloat => {
+            let v = value.parse::<f32>().map_err(|_| {
+                error::Error::ParseError(format!("Invalid half_float value: {}", value))
+            })?;
+            check_bounds(&v, &constraint)
+        }
+        FieldType::Keyword => true,
+        FieldType::Integer => {
+            let dot_pos = value.find(".").unwrap_or(value.len());
+            let v = value[..dot_pos].parse::<i32>().map_err(|_| {
+                error::Error::ParseError(format!("Invalid integer value: {}", value))
+            })?;
+            check_bounds(&v, &constraint)
+        }
+        FieldType::Long => {
+            let dot_pos = value.find(".").unwrap_or(value.len());
+            value[..dot_pos]
+                .parse::<i64>()
+                .map_err(|_| error::Error::ParseError(format!("Invalid long value: {}", value)))?;
+            validate_double(&value, &constraint)?
+        }
+        FieldType::Short => {
+            let dot_pos = value.find(".").unwrap_or(value.len());
+            let v = value[..dot_pos]
+                .parse::<i16>()
+                .map_err(|_| error::Error::ParseError(format!("Invalid short value: {}", value)))?;
+            check_bounds(&v, &constraint)
+        }
+        FieldType::OneDP => true,
+        FieldType::TwoDP => true,
+        FieldType::ThreeDP => true,
+        FieldType::FourDP => true,
+    };
+    Ok(valid)
 }
 
 fn apply_function(value: String, field: &GHubsFieldConfig) -> String {
@@ -873,7 +957,16 @@ fn apply_function(value: String, field: &GHubsFieldConfig) -> String {
         let value = eval(equation.as_str(), false, Unit::NoUnit, false).unwrap();
         val = format!("{}", value);
     }
-    apply_validation(val, &field).unwrap_or("None".to_string())
+    match apply_validation(val.clone(), &field) {
+        Ok(is_valid) => {
+            if is_valid {
+                val
+            } else {
+                "None".to_string()
+            }
+        }
+        Err(_) => "None".to_string(),
+    }
 }
 
 fn translate_value(field: &GHubsFieldConfig, value: &String) -> Vec<String> {
@@ -921,7 +1014,12 @@ fn process_value(value: String, field: &GHubsFieldConfig) -> Result<Vec<String>,
     Ok(ret_values)
 }
 
-fn validate_values(key: &str, ghubs_config: &mut GHubsConfig, record: &StringRecord) {
+fn validate_values(
+    key: &str,
+    ghubs_config: &mut GHubsConfig,
+    record: &StringRecord,
+) -> HashMap<String, String> {
+    let mut validated = HashMap::new();
     for (field_name, field) in ghubs_config.borrow_mut().get_mut(key).unwrap().iter_mut() {
         if let Some(index) = &field.index {
             let string_value = match index {
@@ -932,15 +1030,18 @@ fn validate_values(key: &str, ghubs_config: &mut GHubsConfig, record: &StringRec
                     .collect::<Vec<&str>>()
                     .join(&field.join.as_ref().unwrap_or(&"".to_string())),
             };
-            let values = process_value(string_value, field).unwrap();
+            let values = process_value(string_value, field).unwrap().join(";");
+            validated.insert(field_name.clone(), values);
         }
     }
+    validated
 }
 
 // Parse taxa from a GenomeHubs data file
 fn nodes_from_file(
     config_file: &PathBuf,
     ghubs_config: &mut GHubsConfig,
+    lookup_table: &HashMap<String, Vec<String>>,
 ) -> Result<(), error::Error> {
     let file_config = ghubs_config.file.as_ref().unwrap();
     let delimiter = match file_config.format {
@@ -966,18 +1067,23 @@ fn nodes_from_file(
 
     for result in rdr.records() {
         let record = result?;
+        let mut processed = HashMap::new();
         for key in keys.iter() {
             if ghubs_config.get(key).is_some() {
-                validate_values(key, ghubs_config, &record);
+                let value = validate_values(key, ghubs_config, &record);
+                processed.insert(key, value);
             }
         }
         // let status = record.get(4).unwrap();
-        // dbg!(record);
+        dbg!(processed);
     }
     Ok(())
 }
 
-pub fn parse_file(config_file: PathBuf) -> Result<(), error::Error> {
+pub fn parse_file(
+    config_file: PathBuf,
+    lookup_table: &HashMap<String, Vec<String>>,
+) -> Result<(), error::Error> {
     // let mut children = HashMap::new();
 
     let mut nodes;
@@ -986,7 +1092,8 @@ pub fn parse_file(config_file: PathBuf) -> Result<(), error::Error> {
         Ok(ghubs_config) => ghubs_config,
         Err(err) => return Err(err),
     };
-    nodes = nodes_from_file(&config_file, &mut ghubs_config);
+    nodes = nodes_from_file(&config_file, &mut ghubs_config, &lookup_table);
+    dbg!(nodes);
 
     // let mut rdr = ReaderBuilder::new()
     //     .has_headers(false)
@@ -1020,7 +1127,6 @@ pub struct EnaTaxon {
     // Taxonomic rank
     pub rank: String,
     // Lineage
-    // pub lineage: String,
     #[serde(deserialize_with = "lineage_deserialize")]
     pub lineage: Vec<String>,
 }
@@ -1088,23 +1194,9 @@ pub fn parse_ena_jsonl(
                         }
                     }
                 }
-                // if let Some((parent_tax_id, parent_node)) = table.get_key_value(&taxon.lineage) {
-                //     dbg!(parent_tax_id);
-                // }
-
-                // dbg!(taxon);
             }
         }
     }
-
-    // Status can be:
-    // ACCEPTED
-    // DOUBTFUL
-    // HETEROTYPIC_SYNONYM
-    // HOMOTYPIC_SYNONYM
-    // MISAPPLIED
-    // PROPARTE_SYNONYM
-    // SYNONYM
 
     Ok(Nodes { nodes, children })
 }

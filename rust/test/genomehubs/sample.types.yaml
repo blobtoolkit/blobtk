@@ -32,6 +32,7 @@ attributes:
       - " or "
       - ","
     taxon_traverse_limit: order
+    type: integer
   genome_size:
     function: "{} * 978000000"
     header: "genome_size_pg"
