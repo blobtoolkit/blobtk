@@ -316,13 +316,20 @@ fn set_blob_data(
         category::set_cat_order(
             &filtered_cat_values,
             &z,
-            &Some(cat_order[0].members.join(",")),
+            &Some(
+                cat_order[1..]
+                    .iter()
+                    .map(|x| x.members.join(","))
+                    .collect::<Vec<String>>()
+                    .join(","),
+            ),
             &options.cat_count,
             &palette,
         )
     } else {
         (cat_order, cat_indices)
     };
+
     let blob_data = BlobData {
         x: blobdir::apply_filter_float(&plot_values["x"], &wanted_indices),
         y: blobdir::apply_filter_float(&plot_values["y"], &wanted_indices),

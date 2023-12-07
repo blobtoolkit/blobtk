@@ -114,9 +114,19 @@ pub fn extract_to_option_usize(
     key: &str,
 ) -> Option<usize> {
     let hash_key = String::from(key);
-    let option: Option<usize> = map
-        .get(&hash_key)
-        .map(|value| value.extract::<usize>(py).unwrap());
+    let option: Option<usize> =
+        match map
+            .get(&hash_key)
+            .map(|value| match value.extract::<usize>(py) {
+                Ok(val) => Some(val),
+                Err(_) => match value.extract::<String>(py).unwrap().parse() {
+                    Ok(v) => Some(v),
+                    Err(_) => None,
+                },
+            }) {
+            Some(v) => v,
+            None => None,
+        };
     option
 }
 

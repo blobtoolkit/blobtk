@@ -1,11 +1,8 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use crate::blobdir::parse_blobdir;
-use crate::cli::{self, Origin, Palette, PlotOptions, View};
-use crate::plot::axis::Scale;
-use crate::plot::data::Reducer;
-use crate::plot::{plot_blob, plot_cumulative, plot_legend, plot_snail, ShowLegend};
+use crate::cli::{self, PlotOptions, View};
+use crate::plot::{plot_blob, plot_cumulative, plot_legend, plot_snail};
 use crate::python::utils::{
     extract_to_option_f64, extract_to_option_origin, extract_to_option_palette,
     extract_to_option_reducer, extract_to_option_scale, extract_to_option_showlegend,
@@ -14,67 +11,67 @@ use crate::python::utils::{
 };
 use pyo3::prelude::*;
 
-#[pymethods]
-impl PlotOptions {
-    #[new]
-    #[allow(clippy::too_many_arguments)]
-    fn new(
-        blobdir: PathBuf,
-        view: View,
-        output: Option<String>,
-        filter: Option<Vec<String>>,
-        segments: Option<usize>,
-        max_span: Option<usize>,
-        max_scaffold: Option<usize>,
-        x_field: Option<String>,
-        y_field: Option<String>,
-        z_field: Option<String>,
-        cat_field: Option<String>,
-        resolution: Option<usize>,
-        hist_height: Option<usize>,
-        reducer_function: Option<Reducer>,
-        scale_function: Option<Scale>,
-        scale_factor: Option<f64>,
-        x_limit: Option<String>,
-        y_limit: Option<String>,
-        cat_count: Option<usize>,
-        show_legend: Option<ShowLegend>,
-        cat_order: Option<String>,
-        origin: Option<Origin>,
-        palette: Option<Palette>,
-        color: Option<Vec<String>>,
-    ) -> Self {
-        PlotOptions {
-            blobdir,
-            view,
-            output: output.unwrap_or(String::from("output.svg")),
-            filter: filter.unwrap_or_default(),
-            segments: segments.unwrap_or(1000),
-            max_span,
-            max_scaffold,
-            x_field,
-            y_field,
-            z_field,
-            cat_field,
-            resolution: resolution.unwrap_or(30),
-            hist_height,
-            reducer_function: reducer_function.unwrap_or_default(),
-            scale_function: scale_function.unwrap_or_default(),
-            scale_factor: scale_factor.unwrap_or(1.0),
-            x_limit,
-            y_limit,
-            cat_count: cat_count.unwrap_or(10),
-            show_legend: show_legend.unwrap_or_default(),
-            cat_order,
-            origin,
-            palette,
-            color,
-        }
-    }
-}
+// #[pymethods]
+// impl PlotOptions {
+//     #[new]
+//     #[allow(clippy::too_many_arguments)]
+//     fn new(
+//         blobdir: PathBuf,
+//         view: View,
+//         output: Option<String>,
+//         filter: Option<Vec<String>>,
+//         segments: Option<usize>,
+//         max_span: Option<usize>,
+//         max_scaffold: Option<usize>,
+//         x_field: Option<String>,
+//         y_field: Option<String>,
+//         z_field: Option<String>,
+//         cat_field: Option<String>,
+//         resolution: Option<usize>,
+//         hist_height: Option<usize>,
+//         reducer_function: Option<Reducer>,
+//         scale_function: Option<Scale>,
+//         scale_factor: Option<f64>,
+//         x_limit: Option<String>,
+//         y_limit: Option<String>,
+//         cat_count: Option<usize>,
+//         show_legend: Option<ShowLegend>,
+//         cat_order: Option<String>,
+//         origin: Option<Origin>,
+//         palette: Option<Palette>,
+//         color: Option<Vec<String>>,
+//     ) -> Self {
+//         PlotOptions {
+//             blobdir,
+//             view,
+//             output: output.unwrap_or(String::from("output.svg")),
+//             filter: filter.unwrap_or_default(),
+//             segments: segments.unwrap_or(1000),
+//             max_span,
+//             max_scaffold,
+//             x_field,
+//             y_field,
+//             z_field,
+//             cat_field,
+//             resolution: resolution.unwrap_or(30),
+//             hist_height,
+//             reducer_function: reducer_function.unwrap_or_default(),
+//             scale_function: scale_function.unwrap_or_default(),
+//             scale_factor: scale_factor.unwrap_or(1.0),
+//             x_limit,
+//             y_limit,
+//             cat_count: cat_count.unwrap_or(10),
+//             show_legend: show_legend.unwrap_or_default(),
+//             cat_order,
+//             origin,
+//             palette,
+//             color,
+//         }
+//     }
+// }
 
 #[pyfunction]
-pub fn plot_with_options(options: &PlotOptions, py: Python) -> PyResult<()> {
+pub fn plot_with_options(options: &PlotOptions) -> PyResult<()> {
     let meta = parse_blobdir(&options.blobdir).unwrap();
     let view = &options.view;
     match view {
@@ -146,7 +143,7 @@ pub fn plot(py: Python<'_>, kwds: Option<HashMap<String, PyObject>>) -> PyResult
         Some(map) => convert_hashmap_to_options(py, map),
         None => panic!["No arguments provided"],
     };
-    plot_with_options(&options, py)
+    plot_with_options(&options)
 }
 
 #[pyfunction]
@@ -160,7 +157,7 @@ pub fn blob(py: Python<'_>, kwds: Option<HashMap<String, PyObject>>) -> PyResult
         view: View::Blob,
         ..options
     };
-    plot_with_options(&blob_options, py)
+    plot_with_options(&blob_options)
 }
 
 #[pyfunction]
@@ -174,7 +171,7 @@ pub fn cumulative(py: Python<'_>, kwds: Option<HashMap<String, PyObject>>) -> Py
         view: View::Cumulative,
         ..options
     };
-    plot_with_options(&cumulative_options, py)
+    plot_with_options(&cumulative_options)
 }
 
 #[pyfunction]
@@ -188,7 +185,7 @@ pub fn legend(py: Python<'_>, kwds: Option<HashMap<String, PyObject>>) -> PyResu
         view: View::Legend,
         ..options
     };
-    plot_with_options(&legend_options, py)
+    plot_with_options(&legend_options)
 }
 
 #[pyfunction]
@@ -202,5 +199,5 @@ pub fn snail(py: Python<'_>, kwds: Option<HashMap<String, PyObject>>) -> PyResul
         view: View::Snail,
         ..options
     };
-    plot_with_options(&snail_options, py)
+    plot_with_options(&snail_options)
 }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -162,7 +162,7 @@ pub struct Filter {
     pub min: Option<f64>,
     pub max: Option<f64>,
     pub invert: bool,
-    pub key: Option<Vec<usize>>,
+    pub key: Option<Vec<String>>,
 }
 
 impl Default for Filter {
@@ -417,7 +417,10 @@ pub fn parse_field_int(id: String, blobdir: &PathBuf) -> Result<Vec<usize>, erro
     Ok(values)
 }
 
-pub fn parse_field_string(id: String, blobdir: &PathBuf) -> Result<Vec<String>, error::Error> {
+pub fn parse_field_string(
+    id: String,
+    blobdir: &PathBuf,
+) -> Result<(HashMap<String, usize>, Vec<String>), error::Error> {
     let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
         None => {
@@ -428,9 +431,17 @@ pub fn parse_field_string(id: String, blobdir: &PathBuf) -> Result<Vec<String>, 
             )))
         }
     };
-    let field: Field<String> = serde_json::from_reader(reader).expect("unable to parse json");
-    let values = field.values().clone();
-    Ok(values)
+    let field: Field<usize> = serde_json::from_reader(reader).expect("unable to parse json");
+    let mut keys = HashMap::new();
+    for (index, key) in field.keys.iter().enumerate() {
+        keys.insert(key.clone(), index);
+    }
+    let values: Vec<String> = field
+        .values()
+        .iter()
+        .map(|i| field.keys[i.to_owned()].clone())
+        .collect();
+    Ok((keys, values))
 }
 
 pub fn parse_filters(
@@ -480,13 +491,22 @@ pub fn parse_filters(
                 match param {
                     "Max" => filter_params.max = Some(value.parse().unwrap()),
                     "Min" => filter_params.min = Some(value.parse().unwrap()),
-                    "Key" => {
+                    "Keys" => {
                         filter_params.key = Some(
                             value
                                 .split(",")
-                                .map(|x| x.parse::<usize>().unwrap())
+                                .map(|x| x.parse::<String>().unwrap())
                                 .collect(),
                         )
+                    }
+                    "Inv" => {
+                        filter_params.key = Some(
+                            value
+                                .split(",")
+                                .map(|x| x.parse::<String>().unwrap())
+                                .collect(),
+                        );
+                        filter_params.invert = true
                     }
                     _ => (),
                 }
@@ -556,6 +576,57 @@ pub fn filter_int_values(values: Vec<usize>, filter: Filter, indices: Vec<usize>
     output
 }
 
+pub fn filter_string_values(
+    values: Vec<String>,
+    keys: HashMap<String, usize>,
+    filter: Filter,
+    indices: Vec<usize>,
+) -> Vec<usize> {
+    let initial: Vec<usize> = if indices.is_empty() {
+        (0..(values.len() - 1)).collect()
+    } else {
+        indices.clone()
+    };
+    let mut output = vec![];
+    let ints: Vec<usize> = values
+        .iter()
+        .map(|x| match x.parse::<usize>() {
+            Ok(value) => value,
+            Err(_) => keys[x],
+        })
+        .collect();
+    let set: HashSet<usize> = filter
+        .key
+        .clone()
+        .unwrap()
+        .iter()
+        .map(|x| match x.parse::<usize>() {
+            Ok(value) => value,
+            Err(_) => keys[x],
+        })
+        .collect();
+    for i in initial {
+        let mut keep = true;
+        if filter.key.is_some() {
+            if set.contains(&ints[i]) {
+                keep = false;
+            }
+        }
+        // if filter.min.is_some() {
+        //     if (values[i] as f64) < filter.min.unwrap() {
+        //         keep = false;
+        //     }
+        // }
+        if filter.invert {
+            keep = !keep;
+        }
+        if keep {
+            output.push(i);
+        }
+    }
+    output
+}
+
 pub fn set_filters(filters: HashMap<String, Filter>, meta: &Meta, blobdir: &PathBuf) -> Vec<usize> {
     let mut indices = vec![];
     let field_list = meta.field_list.clone().unwrap();
@@ -572,6 +643,11 @@ pub fn set_filters(filters: HashMap<String, Filter>, meta: &Meta, blobdir: &Path
                     Some(Datatype::Integer) => {
                         let values = parse_field_int(field_meta.id.clone(), blobdir).unwrap();
                         indices = filter_int_values(values, filter, indices);
+                    }
+                    Some(Datatype::String) => {
+                        let (keys, values) =
+                            parse_field_string(field_meta.id.clone(), blobdir).unwrap();
+                        indices = filter_string_values(values, keys, filter, indices);
                     }
                     Some(_) => (),
                     None => (),

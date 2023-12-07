@@ -10,7 +10,6 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt;
-use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -18,8 +17,7 @@ use std::str::FromStr;
 use anyhow;
 use convert_case::{Case, Casing};
 use cpc::{eval, units::Unit};
-use csv::StringRecord;
-use csv::{Reader, ReaderBuilder};
+use csv::{ReaderBuilder, StringRecord};
 use nom::{
     bytes::complete::{tag, take_until},
     combinator::map,
@@ -35,7 +33,6 @@ use struct_iterable::Iterable;
 use crate::error;
 use crate::io;
 
-use super::lookup::build_lineage_lookup;
 use super::lookup::build_lookup;
 
 /// A taxon name
@@ -838,7 +835,7 @@ fn key_index(headers: &StringRecord, key: &str) -> Result<usize, error::Error> {
 }
 
 fn update_config(key: &str, ghubs_config: &mut GHubsConfig, headers: &StringRecord) {
-    for (field_name, field) in ghubs_config.borrow_mut().get_mut(key).unwrap().iter_mut() {
+    for (_, field) in ghubs_config.borrow_mut().get_mut(key).unwrap().iter_mut() {
         if field.header.is_some() {
             // if let Some(header) = &field.header {
             // let field_idx = &mut field.index;
@@ -874,7 +871,7 @@ fn check_bounds<T: Into<f64> + Copy>(value: &T, constraint: &ConstraintConfig) -
     true
 }
 
-fn apply_constraint(value: &mut GHubsConfig, constraint: &ConstraintConfig) {}
+// fn apply_constraint(value: &mut GHubsConfig, constraint: &ConstraintConfig) {}
 
 fn validate_double(value: &String, constraint: &ConstraintConfig) -> Result<bool, error::Error> {
     let v = value
@@ -890,10 +887,10 @@ fn apply_validation(value: String, field: &GHubsFieldConfig) -> Result<bool, err
             ..Default::default()
         },
     };
-    let mut valid = false;
-    dbg!(&field);
+    // let mut valid = false;
+    // dbg!(&field);
     let ref field_type = field.field_type;
-    valid = match field_type {
+    let valid = match field_type {
         FieldType::Byte => {
             let dot_pos = value.find(".").unwrap_or(value.len());
             let v = value[..dot_pos]
@@ -1041,7 +1038,7 @@ fn validate_values(
 fn nodes_from_file(
     config_file: &PathBuf,
     ghubs_config: &mut GHubsConfig,
-    lookup_table: &HashMap<String, Vec<String>>,
+    _lookup_table: &HashMap<String, Vec<String>>,
 ) -> Result<(), error::Error> {
     let file_config = ghubs_config.file.as_ref().unwrap();
     let delimiter = match file_config.format {
@@ -1086,14 +1083,12 @@ pub fn parse_file(
 ) -> Result<(), error::Error> {
     // let mut children = HashMap::new();
 
-    let mut nodes;
-
     let mut ghubs_config = match parse_genomehubs_config(&config_file) {
         Ok(ghubs_config) => ghubs_config,
         Err(err) => return Err(err),
     };
-    nodes = nodes_from_file(&config_file, &mut ghubs_config, &lookup_table);
-    dbg!(nodes);
+    let nodes = nodes_from_file(&config_file, &mut ghubs_config, &lookup_table);
+    dbg!(&nodes);
 
     // let mut rdr = ReaderBuilder::new()
     //     .has_headers(false)
