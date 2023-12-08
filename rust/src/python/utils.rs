@@ -136,9 +136,18 @@ pub fn extract_to_option_f64(
     key: &str,
 ) -> Option<f64> {
     let hash_key = String::from(key);
-    let option: Option<f64> = map
+    let option: Option<f64> = match map
         .get(&hash_key)
-        .map(|value| value.extract::<f64>(py).unwrap());
+        .map(|value| match value.extract::<f64>(py) {
+            Ok(val) => Some(val),
+            Err(_) => match value.extract::<String>(py).unwrap().parse() {
+                Ok(v) => Some(v),
+                Err(_) => None,
+            },
+        }) {
+        Some(v) => v,
+        None => None,
+    };
     option
 }
 
