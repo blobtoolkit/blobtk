@@ -4,6 +4,9 @@ use std::f64::consts::PI;
 
 use coord_transforms::d2::polar2cartesian;
 use coord_transforms::prelude::*;
+use font_kit::family_name::FamilyName;
+use font_kit::properties::Properties;
+use font_kit::source::SystemSource;
 use num_integer::div_rem;
 use svg::node::element::path::Data;
 use svg::node::element::{Circle, Group, Line, Path, Rectangle, Text};
@@ -13,6 +16,7 @@ use crate::utils::{format_si, linear_scale, linear_scale_float, scale_float, sca
 
 use super::axis::{AxisOptions, Position, Scale, TickOptions, TickStatus};
 use super::style::path_open;
+use super::PlotOptions;
 
 #[derive(Clone, Debug)]
 pub struct RadialTick {
@@ -74,10 +78,44 @@ impl Default for LegendEntry {
 }
 
 fn font_family(fallback: &str) -> String {
-    match env::var("FONT_FAMILY") {
-        Ok(family) => format!("{}, {}", family, fallback),
-        _ => fallback.to_string(),
+    let mut font = SystemSource::new()
+        .select_best_match(&[FamilyName::Serif], &Properties::new())
+        .unwrap()
+        .load()
+        .unwrap();
+    let names = fallback.split(",").collect::<Vec<&str>>();
+    let mut should_break = false;
+    for name in names {
+        font = match SystemSource::new().select_best_match(
+            &[FamilyName::Title(name.trim().to_string())],
+            &Properties::new(),
+        ) {
+            Ok(handle) => match handle.load() {
+                Ok(f) => {
+                    if f.family_name() != font.family_name() || f.family_name() == name.trim() {
+                        should_break = true;
+                    }
+                    f
+                }
+                _ => font,
+            },
+            _ => font,
+        };
+        if should_break {
+            break;
+        }
     }
+    let processed_fallback = if should_break {
+        fallback.to_string()
+    } else {
+        format!("{}, {}", fallback, font.family_name())
+    };
+    let value = match env::var("FONT_FAMILY") {
+        Ok(family) => format!("{}, {}", family, processed_fallback),
+        _ => processed_fallback,
+    };
+    dbg!(&value);
+    value
 }
 
 pub fn legend_group(
@@ -86,14 +124,12 @@ pub fn legend_group(
     subtitle: Option<String>,
     columns: u8,
 ) -> Group {
+    let processed_font_family = font_family("Roboto, Open sans, DejaVu Sans, Arial, sans-serif");
     let title_text = if title.is_empty() {
         Text::new()
     } else {
         Text::new()
-            .set(
-                "font-family",
-                font_family("Roboto, Open sans, DejaVu Sans, Arial, sans-serif"),
-            )
+            .set("font-family", processed_font_family.clone())
             .set("font-size", "24")
             .set("text-anchor", "start")
             .set("dominant-baseline", "bottom")
@@ -122,10 +158,7 @@ pub fn legend_group(
             None => ("start", cell + gap, -gap / 2),
         };
         let entry_text = Text::new()
-            .set(
-                "font-family",
-                font_family("Roboto, Open sans, DejaVu Sans, Arial, sans-serif"),
-            )
+            .set("font-family", processed_font_family.clone())
             .set("font-size", cell)
             .set("text-anchor", anchor)
             .set("dominant-baseline", "bottom")
@@ -136,10 +169,7 @@ pub fn legend_group(
             .add(nodeText::new(&entry.title));
         let entry_subtext = if entry.subtitle.is_some() {
             Text::new()
-                .set(
-                    "font-family",
-                    font_family("Roboto, Open sans, DejaVu Sans, Arial, sans-serif"),
-                )
+                .set("font-family", processed_font_family.clone())
                 .set("font-size", cell as f64 * 0.9)
                 .set("text-anchor", "start")
                 .set("dominant-baseline", "bottom")
@@ -230,10 +260,7 @@ pub fn legend_group(
         None => (),
         Some(subtitle_string) => {
             let subtitle_text = Text::new()
-                .set(
-                    "font-family",
-                    font_family("Roboto, Open sans, DejaVu Sans, Arial, sans-serif"),
-                )
+                .set("font-family", processed_font_family.clone())
                 .set("font-size", "18")
                 .set("text-anchor", "start")
                 .set("dominant-baseline", "bottom")
@@ -672,6 +699,7 @@ pub fn set_tick_circular(
     options: &TickOptions,
 ) -> RadialTick {
     let angle = linear_scale_float(index as f64 + offset, &angle_domain, &angle_range);
+    let processed_font_family = font_family("Roboto, Open sans, DejaVu Sans, Arial, sans-serif");
 
     let mut adjusted_tick_range = [tick_range[0], tick_range[1]];
     if offset > 0.0 {
@@ -731,10 +759,7 @@ pub fn set_tick_circular(
         Text::new()
     } else {
         Text::new()
-            .set(
-                "font-family",
-                font_family("Roboto, Open sans, DejaVu Sans, Arial, sans-serif"),
-            )
+            .set("font-family", processed_font_family.clone())
             .set("font-size", options.font_size.clone())
             .set("text-anchor", "middle")
             .set("dominant-baseline", "middle")
@@ -753,10 +778,7 @@ pub fn set_tick_circular(
     };
     let outer_text = match status {
         TickStatus::Major => Text::new()
-            .set(
-                "font-family",
-                font_family("Roboto, Open sans, DejaVu Sans, Arial, sans-serif"),
-            )
+            .set("font-family", processed_font_family.clone())
             .set("font-size", "20")
             .set("text-anchor", "middle")
             .set("dominant-baseline", "bottom")
