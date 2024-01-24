@@ -13,7 +13,6 @@ use crate::utils::{format_si, linear_scale, linear_scale_float, scale_float, sca
 
 use super::axis::{AxisOptions, Position, Scale, TickOptions, TickStatus};
 use super::style::path_open;
-use super::PlotOptions;
 
 #[derive(Clone, Debug)]
 pub struct RadialTick {
