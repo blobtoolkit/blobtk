@@ -4,9 +4,6 @@ use std::f64::consts::PI;
 
 use coord_transforms::d2::polar2cartesian;
 use coord_transforms::prelude::*;
-use font_kit::family_name::FamilyName;
-use font_kit::properties::Properties;
-use font_kit::source::SystemSource;
 use num_integer::div_rem;
 use svg::node::element::path::Data;
 use svg::node::element::{Circle, Group, Line, Path, Rectangle, Text};
@@ -78,44 +75,10 @@ impl Default for LegendEntry {
 }
 
 fn font_family(fallback: &str) -> String {
-    let mut font = SystemSource::new()
-        .select_best_match(&[FamilyName::Serif], &Properties::new())
-        .unwrap()
-        .load()
-        .unwrap();
-    let names = fallback.split(",").collect::<Vec<&str>>();
-    let mut should_break = false;
-    for name in names {
-        font = match SystemSource::new().select_best_match(
-            &[FamilyName::Title(name.trim().to_string())],
-            &Properties::new(),
-        ) {
-            Ok(handle) => match handle.load() {
-                Ok(f) => {
-                    if f.family_name() != font.family_name() || f.family_name() == name.trim() {
-                        should_break = true;
-                    }
-                    f
-                }
-                _ => font,
-            },
-            _ => font,
-        };
-        if should_break {
-            break;
-        }
+    match env::var("FONT_FAMILY") {
+        Ok(family) => format!("{}, {}", family, fallback),
+        _ => fallback.to_string(),
     }
-    let processed_fallback = if should_break {
-        fallback.to_string()
-    } else {
-        format!("{}, {}", fallback, font.family_name())
-    };
-    let value = match env::var("FONT_FAMILY") {
-        Ok(family) => format!("{}, {}", family, processed_fallback),
-        _ => processed_fallback,
-    };
-    dbg!(&value);
-    value
 }
 
 pub fn legend_group(
