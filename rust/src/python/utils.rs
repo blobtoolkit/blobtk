@@ -6,6 +6,7 @@ use pyo3::prelude::*;
 
 use crate::cli::Origin;
 use crate::cli::Palette;
+use crate::cli::Shape;
 use crate::cli::View;
 use crate::plot::axis::Scale;
 use crate::plot::data::Reducer;
@@ -177,6 +178,34 @@ pub fn extract_to_view(py: Python<'_>, map: &HashMap<String, PyObject>, key: &st
         _ => View::Blob,
     };
     value
+}
+
+pub fn extract_to_shape(py: Python<'_>, map: &HashMap<String, PyObject>, key: &str) -> Shape {
+    let hash_key = String::from(key);
+    let value: Shape = match map.get(&hash_key) {
+        Some(value) => match value.extract::<String>(py).unwrap().parse() {
+            Ok(view) => view,
+            _ => Shape::Circle,
+        },
+        _ => Shape::Circle,
+    };
+    value
+}
+
+pub fn extract_to_option_shape(
+    py: Python<'_>,
+    map: &HashMap<String, PyObject>,
+    key: &str,
+) -> Option<Shape> {
+    let hash_key = String::from(key);
+    let option: Option<Shape> = match map.get(&hash_key) {
+        Some(value) => match value.extract::<String>(py).unwrap().parse() {
+            Ok(shape) => Some(shape),
+            _ => Some(Shape::Circle),
+        },
+        _ => Some(Shape::Circle),
+    };
+    option
 }
 
 pub fn extract_to_option_reducer(

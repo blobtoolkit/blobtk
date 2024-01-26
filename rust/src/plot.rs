@@ -11,6 +11,7 @@ use pyo3::pyclass;
 
 use crate::blobdir;
 use crate::cli;
+use crate::cli::Shape;
 use crate::error;
 use crate::plot::blob::BlobData;
 use crate::plot::cumulative::CumulativeData;
@@ -266,10 +267,20 @@ fn insert_hashmap_option(
     Ok(())
 }
 
-fn set_blob_data(
+fn set_blob_filters(
     options: &PlotOptions,
     meta: &blobdir::Meta,
-) -> Result<(HashMap<String, String>, BlobData), anyhow::Error> {
+) -> Result<
+    (
+        HashMap<String, String>,
+        HashMap<String, Vec<f64>>,
+        Vec<usize>,
+        Vec<f64>,
+        Vec<category::Category>,
+        Vec<usize>,
+    ),
+    anyhow::Error,
+> {
     let mut plot_meta: HashMap<String, String> = HashMap::new();
     insert_hashmap_option(
         &mut plot_meta,
@@ -329,6 +340,22 @@ fn set_blob_data(
     } else {
         (cat_order, cat_indices)
     };
+    Ok((
+        plot_meta,
+        plot_values,
+        wanted_indices,
+        z,
+        cat_order,
+        cat_indices,
+    ))
+}
+
+fn set_blob_data(
+    options: &PlotOptions,
+    meta: &blobdir::Meta,
+) -> Result<(HashMap<String, String>, BlobData), anyhow::Error> {
+    let (plot_meta, plot_values, wanted_indices, z, cat_order, cat_indices) =
+        set_blob_filters(options, meta)?;
 
     let blob_data = BlobData {
         x: blobdir::apply_filter_float(&plot_values["x"], &wanted_indices),
@@ -352,22 +379,6 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(),
     let (x_bins, y_bins, max_bin) =
         blob::bin_axes(&scatter_data, &blob_data, &dimensions, &options);
 
-    // let (x_bins, x_max) = blob::bin_axis(
-    //     &scatter_data,
-    //     &blob_data,
-    //     AxisName::X,
-    //     &dimensions,
-    //     &options,
-    // );
-    // let (y_bins, y_max) = blob::bin_axis(
-    //     &scatter_data,
-    //     &blob_data,
-    //     AxisName::Y,
-    //     &dimensions,
-    //     &options,
-    // );
-    // let document: Document = blob::svg(&dimensions, &scatter_data, &x_bins, &y_bins, &options);
-
     let document: Document = blob::plot(
         dimensions,
         scatter_data,
@@ -378,6 +389,52 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(),
         &options,
     );
     save_by_suffix(options, document)?;
+    Ok(())
+}
+
+fn set_grid_data(
+    options: &PlotOptions,
+    meta: &blobdir::Meta,
+) -> Result<(HashMap<String, String>, BlobData), anyhow::Error> {
+    let (plot_meta, plot_values, wanted_indices, z, cat_order, cat_indices) =
+        set_blob_filters(options, meta)?;
+    let (window_values, window_cat_values) =
+        blobdir::get_window_values(&meta, &options.blobdir, &plot_meta, None)?;
+
+    let blob_data = BlobData {
+        x: blobdir::apply_filter_float(&plot_values["x"], &wanted_indices),
+        y: blobdir::apply_filter_float(&plot_values["y"], &wanted_indices),
+        z,
+        cat: cat_indices,
+        cat_order,
+    };
+    // dbg!(window_values);
+    Ok((plot_meta, blob_data))
+}
+
+pub fn plot_grid(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
+    let (plot_meta, grid_data) = set_grid_data(options, meta)?;
+
+    dbg!(grid_data);
+    let dimensions = BlobDimensions {
+        ..Default::default()
+    };
+
+    // let scatter_data = blob::blob_points(plot_meta, &blob_data, &dimensions, &meta, &options);
+
+    // let (x_bins, y_bins, max_bin) =
+    //     blob::bin_axes(&scatter_data, &blob_data, &dimensions, &options);
+
+    // let document: Document = blob::plot(
+    //     dimensions,
+    //     scatter_data,
+    //     x_bins,
+    //     y_bins,
+    //     max_bin,
+    //     max_bin,
+    //     &options,
+    // );
+    // save_by_suffix(options, document)?;
     Ok(())
 }
 
@@ -447,8 +504,12 @@ pub fn plot_cumulative(
 pub fn plot(options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
     let meta = blobdir::parse_blobdir(&options.blobdir)?;
     let view = &options.view;
+    let shape = &options.shape;
     match view {
-        cli::View::Blob => plot_blob(&meta, &options)?,
+        cli::View::Blob => match shape {
+            Some(Shape::Grid) => plot_grid(&meta, &options)?,
+            _ => plot_blob(&meta, &options)?,
+        },
         cli::View::Cumulative => plot_cumulative(&meta, &options)?,
         cli::View::Legend => plot_legend(&meta, &options)?,
         cli::View::Snail => plot_snail(&meta, &options)?,

@@ -401,6 +401,27 @@ pub fn parse_field_float(id: String, blobdir: &PathBuf) -> Result<Vec<f64>, erro
     Ok(values)
 }
 
+pub fn parse_field_float_windows(
+    id: String,
+    blobdir: &PathBuf,
+) -> Result<Vec<Vec<Vec<f64>>>, error::Error> {
+    let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
+        Some(reader) => reader,
+        None => {
+            return Err(error::Error::FileNotFound(format!(
+                "{}/{}.json",
+                &blobdir.to_str().unwrap(),
+                &id
+            )))
+        }
+    };
+    let field: Field<Vec<Vec<f64>>> =
+        serde_json::from_reader(reader).expect("unable to parse json");
+    dbg!(&field);
+    let values = field.values().clone();
+    Ok(values)
+}
+
 pub fn parse_field_int(id: String, blobdir: &PathBuf) -> Result<Vec<usize>, error::Error> {
     let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
@@ -413,6 +434,25 @@ pub fn parse_field_int(id: String, blobdir: &PathBuf) -> Result<Vec<usize>, erro
         }
     };
     let field: Field<usize> = serde_json::from_reader(reader).expect("unable to parse json");
+    let values = field.values().clone();
+    Ok(values)
+}
+
+pub fn parse_field_int_windows(
+    id: String,
+    blobdir: &PathBuf,
+) -> Result<Vec<Vec<usize>>, error::Error> {
+    let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
+        Some(reader) => reader,
+        None => {
+            return Err(error::Error::FileNotFound(format!(
+                "{}/{}.json",
+                &blobdir.to_str().unwrap(),
+                &id
+            )))
+        }
+    };
+    let field: Field<Vec<usize>> = serde_json::from_reader(reader).expect("unable to parse json");
     let values = field.values().clone();
     Ok(values)
 }
@@ -751,5 +791,64 @@ pub fn get_plot_values(
             }
         };
     }
+    Ok((plot_values, cat_values))
+}
+
+pub fn get_window_values(
+    meta: &Meta,
+    blobdir: &PathBuf,
+    plot_map: &HashMap<String, String>,
+    window_size: Option<String>,
+) -> Result<(HashMap<String, Vec<Vec<Vec<f64>>>>, Vec<(String, usize)>), error::Error> {
+    let mut plot_values = HashMap::new();
+    let mut cat_values = vec![];
+    let field_list = meta.field_list.clone().unwrap();
+    for (axis, id) in plot_map {
+        let window_id = match window_size {
+            Some(ref size) => format!("{}_windows_{}", id, size),
+            None => format!("{}_windows", id),
+        };
+        dbg!(&window_id);
+
+        let field_meta_option = field_list.get(&window_id);
+        match field_meta_option {
+            Some(field_meta) => {
+                let field = field_meta.clone();
+                dbg!(field.datatype.clone());
+
+                match field.datatype {
+                    Some(Datatype::Mixed) => {
+                        if window_id == "buscogenes_phylum_windows" {
+                            let values = parse_field_float_windows(field_meta.id.clone(), blobdir)?;
+                            plot_values.insert(axis.clone(), values);
+                        }
+                    }
+                    // Some(Datatype::Integer) => {
+                    //     let values: Vec<f64> =
+                    //         parse_field_int_windows(field_meta.id.clone(), blobdir)?
+                    //             .iter()
+                    //             .map(|x| x.clone() as f64)
+                    //             .collect();
+                    //     plot_values.insert(axis.clone(), values);
+                    // }
+                    // Some(Datatype::String) => {
+                    //     if field.data.is_some() {
+                    //         cat_values = parse_field_cat_windows(field_meta.id.clone(), blobdir)?;
+                    //     }
+                    // }
+                    Some(_) => (),
+                    None => (),
+                }
+            }
+            None => {
+                if axis == "cat" && id == "_" {
+                    cat_values = vec![("blank".to_string(), 0); meta.records]
+                } else {
+                    ()
+                }
+            }
+        };
+    }
+    dbg!(&plot_values);
     Ok((plot_values, cat_values))
 }

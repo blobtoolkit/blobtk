@@ -191,6 +191,25 @@ impl FromStr for View {
     }
 }
 
+#[derive(ValueEnum, Clone, Debug, Default)]
+#[pyclass]
+pub enum Shape {
+    #[default]
+    Circle,
+    Grid,
+}
+
+impl FromStr for Shape {
+    type Err = ();
+    fn from_str(input: &str) -> Result<Shape, Self::Err> {
+        match input {
+            "circle" => Ok(Shape::Circle),
+            "grid" => Ok(Shape::Grid),
+            _ => Ok(Shape::Circle),
+        }
+    }
+}
+
 #[derive(ValueEnum, Clone, Debug)]
 #[pyclass]
 pub enum Origin {
@@ -246,6 +265,10 @@ pub struct PlotOptions {
     #[arg(long, short = 'v')]
     #[clap(value_enum)]
     pub view: View,
+    /// Plot shape for blob plot
+    #[arg(long)]
+    #[clap(value_enum)]
+    pub shape: Option<Shape>,
     /// Output filename
     #[arg(long, short = 'o', default_value_t = String::from("output.svg"))]
     pub output: String,
