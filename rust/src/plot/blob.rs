@@ -6,6 +6,8 @@ use std::str::FromStr;
 use svg::node::element::{Group, Rectangle};
 use svg::Document;
 
+use crate::blobdir::FieldMeta;
+use crate::cli::Shape;
 use crate::utils::{max_float, min_float, scale_floats};
 use crate::{blobdir, cli, plot};
 
@@ -22,7 +24,7 @@ pub struct BlobData {
     pub x: Vec<f64>,
     pub y: Vec<f64>,
     pub z: Vec<f64>,
-    pub cat: Vec<usize>,
+    pub cat: Vec<Option<usize>>,
     pub cat_order: Vec<Category>,
 }
 
@@ -216,46 +218,66 @@ pub fn bin_axes(
     (x_histograms, y_histograms, max_bin)
 }
 
+fn set_domain(
+    field_meta: &FieldMeta,
+    limit_string: Option<String>,
+    limit_arr: Option<[f64; 2]>,
+    limit_clamp: Option<f64>,
+) -> ([f64; 2], Option<f64>) {
+    let clamp = match limit_clamp {
+        Some(value) => value,
+        None => 0.1,
+    };
+    let mut domain = field_meta.range.unwrap();
+    if limit_string.is_some() {
+        if let Some((min_value, max_value)) = limit_string.clone().unwrap().split_once(",") {
+            if !min_value.is_empty() {
+                domain[0] = min_value.parse::<f64>().unwrap();
+            }
+            if !max_value.is_empty() {
+                domain[1] = max_value.parse::<f64>().unwrap();
+            }
+        }
+    } else if limit_arr.is_some() {
+        domain = limit_arr.clone().unwrap();
+    }
+    let clamp_value = if field_meta.clamp.is_some() {
+        domain[0] = field_meta.range.unwrap()[0];
+        field_meta.clamp
+    } else if field_meta.range.unwrap()[0] == 0.0
+        && field_meta.scale.clone().unwrap() == "scaleLog".to_string()
+    {
+        domain[0] = clamp;
+        Some(clamp)
+    } else {
+        None
+    };
+    if domain[0] == domain[1] {
+        if domain[0] == 0.0 {
+            domain[1] += 0.1;
+        } else {
+            domain[0] /= 0.1;
+            domain[1] *= 0.1;
+        }
+    }
+    (domain, clamp_value)
+}
+
 pub fn blob_points(
     axes: HashMap<String, String>,
     blob_data: &BlobData,
     dimensions: &BlobDimensions,
     meta: &blobdir::Meta,
     options: &cli::PlotOptions,
+    limits: Option<HashMap<String, [f64; 2]>>,
 ) -> ScatterData {
-    let default_clamp = 0.1;
     let fields = meta.field_list.clone().unwrap();
     let x_meta = fields[axes["x"].as_str()].clone();
-    let mut x_domain = x_meta.range.unwrap();
-    if options.x_limit.is_some() {
-        if let Some((min_value, max_value)) = options.x_limit.clone().unwrap().split_once(",") {
-            if !min_value.is_empty() {
-                x_domain[0] = min_value.parse::<f64>().unwrap();
-            }
-            if !max_value.is_empty() {
-                x_domain[1] = max_value.parse::<f64>().unwrap();
-            }
-        }
-    }
-    let x_clamp = if x_meta.clamp.is_some() {
-        x_domain[0] = x_meta.range.unwrap()[0];
-        x_meta.clamp
-    } else if x_meta.range.unwrap()[0] == 0.0
-        && x_meta.scale.clone().unwrap() == "scaleLog".to_string()
-    {
-        x_domain[0] = default_clamp;
-        Some(default_clamp)
-    } else {
-        None
+    let (x_limit_arr, y_limit_arr) = match limits {
+        Some(limit) => (Some(limit["x"]), Some(limit["y"])),
+        None => (None, None),
     };
-    if x_domain[0] == x_domain[1] {
-        if x_domain[0] == 0.0 {
-            x_domain[1] += 0.1;
-        } else {
-            x_domain[0] /= 0.1;
-            x_domain[1] *= 0.1;
-        }
-    }
+    let (x_domain, x_clamp) = set_domain(&x_meta, options.x_limit.clone(), x_limit_arr, None);
     let x_axis = AxisOptions {
         position: Position::BOTTOM,
         height: dimensions.height + dimensions.padding[0] + dimensions.padding[2],
@@ -271,38 +293,16 @@ pub fn blob_points(
     let x_scaled = scale_values(&blob_data.x, &x_axis);
 
     let y_meta = fields[axes["y"].as_str()].clone();
-    let mut y_domain = y_meta.range.unwrap();
-    if options.y_limit.is_some() {
-        if let Some((min_value, max_value)) = options.y_limit.clone().unwrap().split_once(",") {
-            if !min_value.is_empty() {
-                y_domain[0] = min_value.parse::<f64>().unwrap();
-            }
-            if !max_value.is_empty() {
-                y_domain[1] = max_value.parse::<f64>().unwrap();
-            }
-        }
-    }
+    let (y_domain, y_clamp) = set_domain(&y_meta, options.y_limit.clone(), y_limit_arr, None);
 
-    let y_clamp = if y_meta.clamp.is_some() {
-        y_domain[0] = y_meta.range.unwrap()[0];
-        y_meta.clamp
-    } else if y_meta.range.unwrap()[0] == 0.0
-        && y_meta.scale.clone().unwrap() == "scaleLog".to_string()
-    {
-        y_domain[0] = default_clamp;
-        Some(default_clamp)
-    } else {
-        None
-    };
-
-    if y_domain[0] == y_domain[1] {
-        if y_domain[0] == 0.0 {
-            y_domain[1] += 0.1;
-        } else {
-            y_domain[0] /= 2.0;
-            y_domain[1] *= 2.0;
-        }
-    }
+    // if y_domain[0] == y_domain[1] {
+    //     if y_domain[0] == 0.0 {
+    //         y_domain[1] += 0.1;
+    //     } else {
+    //         y_domain[0] /= 2.0;
+    //         y_domain[1] *= 2.0;
+    //     }
+    // }
     let y_axis = AxisOptions {
         position: Position::LEFT,
         height: dimensions.width + dimensions.padding[1] + dimensions.padding[3],
@@ -335,24 +335,54 @@ pub fn blob_points(
         ..Default::default()
     };
     let z_scaled = scale_values(&blob_data.z, &z_axis);
-
     let mut points = vec![];
-    let cat_order = blob_data.cat_order.clone();
-    let mut ordered_points = vec![vec![]; cat_order.len() - 1];
-    for (i, cat_index) in blob_data.cat.iter().enumerate() {
-        let cat = cat_order[*cat_index].borrow();
-        ordered_points[*cat_index - 1].push(ScatterPoint {
-            x: x_scaled[i],
-            y: y_scaled[i],
-            z: z_scaled[i],
-            label: Some(cat.title.clone()),
-            color: Some(cat.color.clone()),
-            cat_index: *cat_index - 1,
-            data_index: i,
-        })
-    }
-    for cat_points in ordered_points {
-        points.extend(cat_points);
+    match options.shape {
+        Some(Shape::Grid) => {
+            for (i, x) in x_scaled.iter().enumerate() {
+                if let Some(cat_index) = blob_data.cat[i] {
+                    let cat = blob_data.cat_order[cat_index].clone();
+                    points.push(ScatterPoint {
+                        x: *x,
+                        y: y_scaled[i],
+                        z: z_scaled[i],
+                        label: Some(cat.title.clone()),
+                        color: Some(cat.color.clone()),
+                        cat_index,
+                        data_index: i,
+                    })
+                } else {
+                    points.push(ScatterPoint {
+                        x: *x,
+                        y: y_scaled[i],
+                        z: z_scaled[i],
+                        data_index: i,
+                        ..Default::default()
+                    })
+                }
+            }
+        }
+        _ => {
+            let cat_order = blob_data.cat_order.clone();
+            let mut ordered_points = vec![vec![]; cat_order.len() - 1];
+            // TODO: add option to keep points together
+            for (i, cat_index) in blob_data.cat.iter().enumerate() {
+                if let Some(idx) = cat_index {
+                    let cat = cat_order[*idx].borrow();
+                    ordered_points[*idx - 1].push(ScatterPoint {
+                        x: x_scaled[i],
+                        y: y_scaled[i],
+                        z: z_scaled[i],
+                        label: Some(cat.title.clone()),
+                        color: Some(cat.color.clone()),
+                        cat_index: *idx - 1,
+                        data_index: i,
+                    })
+                }
+            }
+            for cat_points in ordered_points {
+                points.extend(cat_points);
+            }
+        }
     }
     ScatterData {
         points,

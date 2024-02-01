@@ -65,6 +65,9 @@ pub enum SubCommand {
     /// Filter files based on list of sequence names.
     /// Called as `blobtk filter`
     Filter(FilterOptions),
+    /// [experimental] Index files for GenomeHubs.
+    /// Called as `blobtk index`
+    Index(IndexOptions),
     /// Process a BlobDir and produce static plots.
     /// Called as `blobtk plot`
     Plot(PlotOptions),
@@ -166,6 +169,18 @@ pub struct FilterOptions {
     /// Path to output list of read IDs
     #[arg(long = "read-list", short = 'O', value_name = "TXT")]
     pub read_list: Option<PathBuf>,
+}
+
+/// Options to pass to `blobtk index`
+#[derive(Parser, Debug)]
+// #[pyclass]
+pub struct IndexOptions {
+    /// Flag to generate JSON schema
+    #[arg(long, short = 'g')]
+    pub schema: bool,
+    /// Output schema file name
+    #[arg(long, short = 'O')]
+    pub out: Option<PathBuf>,
 }
 
 #[derive(ValueEnum, Clone, Debug, Default)]

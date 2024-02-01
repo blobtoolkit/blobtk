@@ -100,7 +100,10 @@ impl Chart {
                         .set("cx", point.x)
                         .set("cy", point.y)
                         .set("r", point.z)
-                        .set("fill", point.color.clone().unwrap())
+                        .set(
+                            "fill",
+                            point.color.clone().unwrap_or_else(|| "#ffffff".to_string()),
+                        )
                         .set("stroke", "#999999")
                         .set("fill-opacity", opacity),
                 );

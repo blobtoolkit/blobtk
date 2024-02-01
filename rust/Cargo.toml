@@ -58,6 +58,7 @@ regex = "1.7.0"
 resvg = "0.31.0"
 rust-htslib = "0.40.2"
 rust_decimal = "1.29.1"
+schemars = "0.8.16"
 serde = { version = "1.0.152", features= ["derive"] }
 serde-aux = "4.2.0"
 serde_json = "1.0.93"

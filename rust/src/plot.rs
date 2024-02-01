@@ -277,7 +277,7 @@ fn set_blob_filters(
         Vec<usize>,
         Vec<f64>,
         Vec<category::Category>,
-        Vec<usize>,
+        Vec<Option<usize>>,
     ),
     anyhow::Error,
 > {
@@ -374,7 +374,7 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(),
         ..Default::default()
     };
 
-    let scatter_data = blob::blob_points(plot_meta, &blob_data, &dimensions, &meta, &options);
+    let scatter_data = blob::blob_points(plot_meta, &blob_data, &dimensions, &meta, &options, None);
 
     let (x_bins, y_bins, max_bin) =
         blob::bin_axes(&scatter_data, &blob_data, &dimensions, &options);
@@ -395,46 +395,70 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(),
 fn set_grid_data(
     options: &PlotOptions,
     meta: &blobdir::Meta,
-) -> Result<(HashMap<String, String>, BlobData), anyhow::Error> {
+) -> Result<(HashMap<String, String>, BlobData, HashMap<String, [f64; 2]>), anyhow::Error> {
     let (plot_meta, plot_values, wanted_indices, z, cat_order, cat_indices) =
         set_blob_filters(options, meta)?;
-    let (window_values, window_cat_values) =
-        blobdir::get_window_values(&meta, &options.blobdir, &plot_meta, None)?;
-
+    let (window_values, window_cat_values, limits) = blobdir::get_window_values(
+        &meta,
+        &options.blobdir,
+        &plot_meta,
+        &wanted_indices,
+        Some("100000".to_string()),
+    )?;
     let blob_data = BlobData {
-        x: blobdir::apply_filter_float(&plot_values["x"], &wanted_indices),
-        y: blobdir::apply_filter_float(&plot_values["y"], &wanted_indices),
-        z,
-        cat: cat_indices,
+        x: window_values["x"][0].clone(),
+        y: window_values["y"][0].clone(),
+        z: window_values["z"][0].clone(),
+        cat: window_cat_values[0]
+            .iter()
+            .map(|c| match c {
+                Some((_, idx)) => Some(idx.to_owned() + 1),
+                None => None,
+            })
+            .collect(),
         cat_order,
     };
     // dbg!(window_values);
-    Ok((plot_meta, blob_data))
+    Ok((plot_meta, blob_data, limits))
 }
 
 pub fn plot_grid(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
-    let (plot_meta, grid_data) = set_grid_data(options, meta)?;
+    let (plot_meta, grid_data, limits) = set_grid_data(options, meta)?;
 
-    dbg!(grid_data);
+    // dbg!(&meta);
+    dbg!(&limits);
+    // dbg!(grid_data);
     let dimensions = BlobDimensions {
         ..Default::default()
     };
 
-    // let scatter_data = blob::blob_points(plot_meta, &blob_data, &dimensions, &meta, &options);
+    let blob_data = grid_data;
 
-    // let (x_bins, y_bins, max_bin) =
-    //     blob::bin_axes(&scatter_data, &blob_data, &dimensions, &options);
+    // let mut updated_options = options.clone().to_owned();
+    // updated_options.x_limit = Some(format!("{},{}", limits["x"][0], limits["x"][1]));
 
-    // let document: Document = blob::plot(
-    //     dimensions,
-    //     scatter_data,
-    //     x_bins,
-    //     y_bins,
-    //     max_bin,
-    //     max_bin,
-    //     &options,
-    // );
-    // save_by_suffix(options, document)?;
+    let scatter_data = blob::blob_points(
+        plot_meta,
+        &blob_data,
+        &dimensions,
+        &meta,
+        &options,
+        Some(limits),
+    );
+
+    let (x_bins, y_bins, max_bin) =
+        blob::bin_axes(&scatter_data, &blob_data, &dimensions, &options);
+
+    let document: Document = blob::plot(
+        dimensions,
+        scatter_data,
+        x_bins,
+        y_bins,
+        max_bin,
+        max_bin,
+        &options,
+    );
+    save_by_suffix(options, document)?;
     Ok(())
 }
 
@@ -445,7 +469,7 @@ pub fn plot_legend(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(
         ..Default::default()
     };
 
-    let scatter_data = blob::blob_points(plot_meta, &blob_data, &dimensions, &meta, &options);
+    let scatter_data = blob::blob_points(plot_meta, &blob_data, &dimensions, &meta, &options, None);
 
     let document: Document = blob::legend(dimensions, scatter_data, &options);
     save_by_suffix(options, document)?;
@@ -485,7 +509,7 @@ pub fn plot_cumulative(
 
     let cumulative_data = CumulativeData {
         values: blobdir::apply_filter_float(&plot_values["z"], &wanted_indices),
-        cat: blobdir::apply_filter_int(&cat_indices, &wanted_indices),
+        cat: blobdir::apply_filter_option_int(&cat_indices, &wanted_indices),
         cat_order,
     };
 
