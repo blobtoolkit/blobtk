@@ -660,8 +660,8 @@ pub fn svg(snail_stats: &SnailStats, options: &cli::PlotOptions) -> Document {
     let n90_arc_path = path_filled(n90_arc_data, Some("#fdbf6f"));
     let n50_arc_outline_path = path_open(n50_arc_outline_data, Some("#ff7f00"), None);
     let longest_arc_outline_path = path_open(longest_arc_outline_data, Some("#e31a1c"), None);
-    let inner = path_axis_major(axis_arc_data, None);
-    let outer = path_axis_major(outer_axis_arc_data, None);
+    let inner = path_axis_major(axis_arc_data, None, None);
+    let outer = path_axis_major(outer_axis_arc_data, None, None);
 
     let inner_axis = Line::new()
         .set("fill", "none")
@@ -867,7 +867,7 @@ fn busco_plot(snail_stats: &SnailStats) -> Group {
     }
 
     let cirular_axis_data = arc_path(outer_radius, None, -PI / 2.0, PI * 1.5, 1000);
-    let circular_axis_path = path_axis_minor(cirular_axis_data, None);
+    let circular_axis_path = path_axis_minor(cirular_axis_data, None, None);
 
     let radial_axis = Line::new()
         .set("fill", "none")

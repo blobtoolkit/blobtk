@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow;
+use num_integer::sqrt;
 use pyo3::pyclass;
 
 use crate::blobdir;
@@ -25,6 +26,7 @@ use usvg::{fontdb, TreeParsing, TreeTextToPath};
 
 use self::blob::BlobDimensions;
 use self::chart::Dimensions;
+use self::chart::TopRightBottomLeft;
 
 /// Plot axis functions.
 pub mod axis;
@@ -395,7 +397,14 @@ pub fn plot_blob(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(),
 fn set_grid_data(
     options: &PlotOptions,
     meta: &blobdir::Meta,
-) -> Result<(HashMap<String, String>, BlobData, HashMap<String, [f64; 2]>), anyhow::Error> {
+) -> Result<
+    (
+        HashMap<String, String>,
+        Vec<BlobData>,
+        HashMap<String, [f64; 2]>,
+    ),
+    anyhow::Error,
+> {
     let (plot_meta, plot_values, wanted_indices, z, cat_order, cat_indices) =
         set_blob_filters(options, meta)?;
     let (window_values, window_cat_values, limits) = blobdir::get_window_values(
@@ -405,59 +414,165 @@ fn set_grid_data(
         &wanted_indices,
         Some("100000".to_string()),
     )?;
-    let blob_data = BlobData {
-        x: window_values["x"][0].clone(),
-        y: window_values["y"][0].clone(),
-        z: window_values["z"][0].clone(),
-        cat: window_cat_values[0]
-            .iter()
-            .map(|c| match c {
-                Some((_, idx)) => Some(idx.to_owned() + 1),
-                None => None,
-            })
-            .collect(),
-        cat_order,
-    };
+    let mut grid_data = vec![];
+    for (i, x) in window_values["x"].iter().enumerate() {
+        grid_data.push(BlobData {
+            x: x.clone(),
+            y: window_values["y"][i].clone(),
+            z: window_values["z"][i].clone(),
+            cat: window_cat_values[i]
+                .iter()
+                .map(|c| match c {
+                    Some((_, idx)) => Some(idx.to_owned() + 1),
+                    None => None,
+                })
+                .collect(),
+            cat_order: cat_order.clone(),
+        })
+    }
+    // let blob_data = BlobData {
+    //     x: window_values["x"][0].clone(),
+    //     y: window_values["y"][0].clone(),
+    //     z: window_values["z"][0].clone(),
+    //     cat: window_cat_values[0]
+    //         .iter()
+    //         .map(|c| match c {
+    //             Some((_, idx)) => Some(idx.to_owned() + 1),
+    //             None => None,
+    //         })
+    //         .collect(),
+    //     cat_order,
+    // };
     // dbg!(window_values);
-    Ok((plot_meta, blob_data, limits))
+    Ok((plot_meta, grid_data, limits))
+}
+
+#[derive(Clone, Debug)]
+pub struct GridSize {
+    num_items: usize,
+    height: f64,
+    width: f64,
+    num_rows: usize,
+    num_cols: usize,
+    row_height: f64,
+    col_width: f64,
+    margin: TopRightBottomLeft,
+    padding: TopRightBottomLeft,
+    outer_margin: TopRightBottomLeft,
+}
+
+impl Default for GridSize {
+    fn default() -> GridSize {
+        let dimensions = Dimensions {
+            ..Default::default()
+        };
+        GridSize {
+            num_items: 1,
+            height: dimensions.height,
+            width: dimensions.width,
+            num_rows: 1,
+            num_cols: 1,
+            row_height: dimensions.height,
+            col_width: dimensions.width,
+            margin: TopRightBottomLeft {
+                ..Default::default()
+            },
+            padding: TopRightBottomLeft {
+                ..Default::default()
+            },
+            outer_margin: TopRightBottomLeft {
+                ..Default::default()
+            },
+        }
+    }
+}
+
+impl GridSize {
+    pub fn new(num_items: usize, dimensions: &BlobDimensions) -> Self {
+        let (num_rows, num_cols) = calculate_grid_size(num_items);
+        GridSize {
+            num_items,
+            height: dimensions.height,
+            width: dimensions.width,
+            num_rows,
+            num_cols,
+            row_height: (dimensions.height - dimensions.margin.top - dimensions.margin.bottom)
+                / num_rows as f64,
+            col_width: (dimensions.width - dimensions.margin.left - dimensions.margin.right)
+                / num_cols as f64,
+            margin: TopRightBottomLeft {
+                bottom: 25.0,
+                left: 25.0,
+                ..Default::default()
+            },
+            padding: TopRightBottomLeft {
+                top: 10.0,
+                right: 10.0,
+                bottom: 10.0,
+                left: 10.0,
+            },
+            outer_margin: dimensions.margin.clone(),
+        }
+    }
+}
+/// Calculates the minimum and maximum dimensions for a grid layout based on the
+/// number of items. Returns the dimensions as a [min, max] tuple.
+fn calculate_grid_size(num_items: usize) -> (usize, usize) {
+    // return early if count is 0
+    let mut grid_size = [0; 2];
+    // Grid should be as close to square as possible
+    if num_items > 0 {
+        grid_size = [sqrt(num_items); 2];
+    }
+    // if not a perfect square, add one to the max dimension
+    if num_items > grid_size[0] * grid_size[1] {
+        grid_size[1] += 1;
+    }
+    // if not an n(n+1) rectangle, add one to the min dimension to make an (n+1)(n+1) larger square
+    if num_items > grid_size[0] * grid_size[1] {
+        grid_size[0] += 1;
+    }
+    (grid_size[0], grid_size[1])
 }
 
 pub fn plot_grid(meta: &blobdir::Meta, options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
     let (plot_meta, grid_data, limits) = set_grid_data(options, meta)?;
 
-    // dbg!(&meta);
-    dbg!(&limits);
-    // dbg!(grid_data);
     let dimensions = BlobDimensions {
         ..Default::default()
     };
-
-    let blob_data = grid_data;
+    let grid_size = GridSize::new(grid_data.len(), &dimensions);
+    let mut scatter_data = vec![];
+    for blob_data in grid_data {
+        scatter_data.push(blob::blob_points(
+            plot_meta.clone(),
+            &blob_data,
+            &BlobDimensions {
+                height: grid_size.row_height
+                    - grid_size.padding.top
+                    - grid_size.padding.bottom
+                    - -grid_size.margin.top
+                    - grid_size.margin.bottom,
+                width: grid_size.col_width
+                    - grid_size.padding.left
+                    - grid_size.padding.right
+                    - grid_size.margin.left
+                    - grid_size.margin.right,
+                padding: grid_size.padding.clone(),
+                margin: grid_size.margin.clone(),
+                ..Default::default()
+            },
+            &meta,
+            &options,
+            Some(limits.clone()),
+        ));
+    }
+    // let blob_data = grid_data;
 
     // let mut updated_options = options.clone().to_owned();
     // updated_options.x_limit = Some(format!("{},{}", limits["x"][0], limits["x"][1]));
 
-    let scatter_data = blob::blob_points(
-        plot_meta,
-        &blob_data,
-        &dimensions,
-        &meta,
-        &options,
-        Some(limits),
-    );
-
-    let (x_bins, y_bins, max_bin) =
-        blob::bin_axes(&scatter_data, &blob_data, &dimensions, &options);
-
-    let document: Document = blob::plot(
-        dimensions,
-        scatter_data,
-        x_bins,
-        y_bins,
-        max_bin,
-        max_bin,
-        &options,
-    );
+    let document: Document = blob::plot_grid(grid_size, scatter_data, &options);
     save_by_suffix(options, document)?;
     Ok(())
 }
@@ -539,4 +654,65 @@ pub fn plot(options: &cli::PlotOptions) -> Result<(), anyhow::Error> {
         cli::View::Snail => plot_snail(&meta, &options)?,
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_grid_size_23() {
+        let count = 23;
+        let expected = (5, 5);
+        let result = calculate_grid_size(count);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_calculate_grid_size_16() {
+        let count = 16;
+        let expected = (4, 4);
+        let result = calculate_grid_size(count);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_calculate_grid_size_5() {
+        let count = 5;
+        let expected = (2, 3);
+        let result = calculate_grid_size(count);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_calculate_grid_size_37() {
+        let count = 37;
+        let expected = (6, 7);
+        let result = calculate_grid_size(count);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_calculate_grid_size_2() {
+        let count = 2;
+        let expected = (1, 2);
+        let result = calculate_grid_size(count);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_calculate_grid_size_1() {
+        let count = 1;
+        let expected = (1, 1);
+        let result = calculate_grid_size(count);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_calculate_grid_size_0() {
+        let count = 1;
+        let expected = (1, 1);
+        let result = calculate_grid_size(count);
+        assert_eq!(result, expected);
+    }
 }

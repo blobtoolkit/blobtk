@@ -237,21 +237,21 @@ pub fn legend_group(
     group
 }
 
-pub fn path_axis_major(path_data: Data, color: Option<&str>) -> Path {
+pub fn path_axis_major(path_data: Data, color: Option<&str>, width: Option<f64>) -> Path {
     let col = color.unwrap_or("black");
     Path::new()
         .set("stroke", col)
         .set("fill", "none")
-        .set("stroke-width", 3)
+        .set("stroke-width", width.unwrap_or_else(|| 3.0))
         .set("d", path_data)
 }
 
-pub fn path_axis_minor(path_data: Data, color: Option<&str>) -> Path {
+pub fn path_axis_minor(path_data: Data, color: Option<&str>, width: Option<f64>) -> Path {
     let col = color.unwrap_or("black");
     Path::new()
         .set("stroke", col)
         .set("fill", "none")
-        .set("stroke-width", 1)
+        .set("stroke-width", width.unwrap_or_else(|| 1.0))
         .set("d", path_data)
 }
 
@@ -287,10 +287,13 @@ pub fn set_tick(
         TickStatus::Major => path_axis_major(
             Data::new().move_to((-10, offset)).line_to((0, offset)),
             None,
+            None,
         ),
-        TickStatus::Minor => {
-            path_axis_minor(Data::new().move_to((-5, offset)).line_to((0, offset)), None)
-        }
+        TickStatus::Minor => path_axis_minor(
+            Data::new().move_to((-5, offset)).line_to((0, offset)),
+            None,
+            None,
+        ),
     };
     let text = match status {
         TickStatus::Major => Text::new()
@@ -382,7 +385,7 @@ pub fn create_tick(
                 location,
                 axis_options.offset - tick_options.length,
                 location,
-                axis_height,
+                axis_options.offset + axis_height,
                 location,
                 axis_options.offset - tick_options.length * 1.5,
                 location,
@@ -393,8 +396,16 @@ pub fn create_tick(
         };
     let path_data = Data::new().move_to((x1, y1)).line_to((x2, y2));
     let path = match tick_options.status {
-        TickStatus::Major => path_axis_major(path_data, Some(&axis_options.color)),
-        TickStatus::Minor => path_axis_minor(path_data, Some(&axis_options.color)),
+        TickStatus::Major => path_axis_major(
+            path_data,
+            Some(&axis_options.color),
+            Some(tick_options.weight),
+        ),
+        TickStatus::Minor => path_axis_minor(
+            path_data,
+            Some(&axis_options.color),
+            Some(tick_options.weight),
+        ),
     };
     let gridline = match tick_options.status {
         TickStatus::Major => path_open(
@@ -714,8 +725,8 @@ pub fn set_tick_circular(
             .line_to((tick_points[1][0], tick_points[1][1]))
     };
     let path = match status {
-        TickStatus::Major => path_axis_major(tick_path_data, None),
-        TickStatus::Minor => path_axis_minor(tick_path_data, None),
+        TickStatus::Major => path_axis_major(tick_path_data, None, None),
+        TickStatus::Minor => path_axis_minor(tick_path_data, None, None),
     };
     let text = if label == "100".to_string() && angle > 1.4 * PI {
         Text::new()

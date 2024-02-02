@@ -13,11 +13,11 @@ use crate::{blobdir, cli, plot};
 
 use plot::category::Category;
 
-use super::axis::{AxisName, AxisOptions, ChartAxes, Position, Scale};
-use super::chart::{Chart, Dimensions};
+use super::axis::{AxisName, AxisOptions, ChartAxes, Position, Scale, TickOptions};
+use super::chart::{Chart, Dimensions, TopRightBottomLeft};
 use super::component::{legend_group, LegendEntry, LegendShape};
 use super::data::{Bin, HistogramData, Reducer, ScatterData, ScatterPoint};
-use super::ShowLegend;
+use super::{GridSize, ShowLegend};
 
 #[derive(Clone, Debug)]
 pub struct BlobData {
@@ -32,8 +32,8 @@ pub struct BlobData {
 pub struct BlobDimensions {
     pub height: f64,
     pub width: f64,
-    pub margin: [f64; 4],
-    pub padding: [f64; 4],
+    pub margin: TopRightBottomLeft,
+    pub padding: TopRightBottomLeft,
     pub hist_height: f64,
     pub hist_width: f64,
 }
@@ -280,10 +280,10 @@ pub fn blob_points(
     let (x_domain, x_clamp) = set_domain(&x_meta, options.x_limit.clone(), x_limit_arr, None);
     let x_axis = AxisOptions {
         position: Position::BOTTOM,
-        height: dimensions.height + dimensions.padding[0] + dimensions.padding[2],
+        height: dimensions.height + dimensions.padding.top + dimensions.padding.bottom,
         label: axes["x"].clone(),
-        padding: [dimensions.padding[3], dimensions.padding[1]],
-        offset: dimensions.height + dimensions.padding[0] + dimensions.padding[2],
+        padding: [dimensions.padding.left, dimensions.padding.right],
+        offset: dimensions.height + dimensions.padding.top + dimensions.padding.bottom,
         scale: Scale::from_str(&x_meta.scale.unwrap()).unwrap(),
         domain: x_domain,
         range: [0.0, dimensions.width],
@@ -305,9 +305,9 @@ pub fn blob_points(
     // }
     let y_axis = AxisOptions {
         position: Position::LEFT,
-        height: dimensions.width + dimensions.padding[1] + dimensions.padding[3],
+        height: dimensions.width + dimensions.padding.right + dimensions.padding.left,
         label: axes["y"].clone(),
-        padding: [dimensions.padding[2], dimensions.padding[0]],
+        padding: [dimensions.padding.bottom, dimensions.padding.top],
         scale: Scale::from_str(&y_meta.scale.unwrap()).unwrap(),
         domain: y_domain,
         range: [dimensions.height, 0.0],
@@ -437,17 +437,17 @@ pub fn plot(
 ) -> Document {
     let height = blob_dimensions.height
         + blob_dimensions.hist_height
-        + blob_dimensions.margin[0]
-        + blob_dimensions.margin[2]
-        + blob_dimensions.padding[0]
-        + blob_dimensions.padding[2];
+        + blob_dimensions.margin.top
+        + blob_dimensions.margin.bottom
+        + blob_dimensions.padding.top
+        + blob_dimensions.padding.bottom;
 
     let width = blob_dimensions.width
         + blob_dimensions.hist_width
-        + blob_dimensions.margin[1]
-        + blob_dimensions.margin[3]
-        + blob_dimensions.padding[1]
-        + blob_dimensions.padding[3];
+        + blob_dimensions.margin.right
+        + blob_dimensions.margin.left
+        + blob_dimensions.padding.right
+        + blob_dimensions.padding.left;
     let x_opts = scatter_data.x.clone();
     let y_opts = scatter_data.y.clone();
 
@@ -481,8 +481,8 @@ pub fn plot(
                 label: "sum length".to_string(),
                 label_offset: 80.0,
                 height: blob_dimensions.width
-                    + blob_dimensions.padding[1]
-                    + blob_dimensions.padding[3],
+                    + blob_dimensions.padding.right
+                    + blob_dimensions.padding.left,
                 font_size: 25.0,
                 scale: Scale::LINEAR,
                 domain: [0.0, x_max],
@@ -501,8 +501,8 @@ pub fn plot(
             y2: Some(AxisOptions {
                 position: Position::RIGHT,
                 offset: blob_dimensions.width
-                    + blob_dimensions.padding[1]
-                    + blob_dimensions.padding[3],
+                    + blob_dimensions.padding.right
+                    + blob_dimensions.padding.left,
                 scale: Scale::LINEAR,
                 domain: [0.0, x_max],
                 range: [blob_dimensions.hist_height, 0.0],
@@ -516,13 +516,14 @@ pub fn plot(
         dimensions: Dimensions {
             height: blob_dimensions.hist_height,
             width: blob_dimensions.width,
-            margin: [0.0, 0.0, 0.0, 0.0],
-            padding: [
-                0.0,
-                blob_dimensions.padding[1],
-                0.0,
-                blob_dimensions.padding[3],
-            ],
+            margin: TopRightBottomLeft {
+                ..Default::default()
+            },
+            padding: TopRightBottomLeft {
+                right: blob_dimensions.padding.right,
+                left: blob_dimensions.padding.left,
+                ..Default::default()
+            },
         },
         ..Default::default()
     };
@@ -539,11 +540,11 @@ pub fn plot(
             y: Some(AxisOptions {
                 position: Position::BOTTOM,
                 height: blob_dimensions.height
-                    + blob_dimensions.padding[0]
-                    + blob_dimensions.padding[2],
+                    + blob_dimensions.padding.top
+                    + blob_dimensions.padding.bottom,
                 offset: blob_dimensions.height
-                    + blob_dimensions.padding[0]
-                    + blob_dimensions.padding[2],
+                    + blob_dimensions.padding.top
+                    + blob_dimensions.padding.bottom,
                 label: "sum length".to_string(),
                 label_offset: 80.0,
                 font_size: 25.0,
@@ -580,13 +581,14 @@ pub fn plot(
         dimensions: Dimensions {
             height: blob_dimensions.hist_width,
             width: blob_dimensions.height,
-            margin: [0.0, 0.0, 0.0, 0.0],
-            padding: [
-                blob_dimensions.padding[0],
-                0.0,
-                blob_dimensions.padding[2],
-                0.0,
-            ],
+            margin: TopRightBottomLeft {
+                ..Default::default()
+            },
+            padding: TopRightBottomLeft {
+                top: blob_dimensions.padding.top,
+                bottom: blob_dimensions.padding.bottom,
+                ..Default::default()
+            },
         },
         ..Default::default()
     };
@@ -605,36 +607,183 @@ pub fn plot(
                 .set("width", width)
                 .set("height", height),
         )
-        .add(scatter.svg().set(
+        .add(scatter.svg(0.0, 0.0).set(
             "transform",
             format!(
                 "translate({}, {})",
-                blob_dimensions.margin[3],
-                blob_dimensions.hist_height + blob_dimensions.margin[0]
+                blob_dimensions.margin.left,
+                blob_dimensions.hist_height + blob_dimensions.margin.top
             ),
         ))
-        .add(x_hist.svg().set(
+        .add(x_hist.svg(0.0, 0.0).set(
             "transform",
             format!(
                 "translate({}, {})",
-                blob_dimensions.margin[3], blob_dimensions.margin[0]
+                blob_dimensions.margin.left, blob_dimensions.margin.top
             ),
         ))
-        .add(y_hist.svg().set(
+        .add(y_hist.svg(0.0, 0.0).set(
             "transform",
             format!(
                 "translate({}, {})",
-                blob_dimensions.margin[3]
+                blob_dimensions.margin.left
                     + blob_dimensions.width
-                    + blob_dimensions.padding[1]
-                    + blob_dimensions.padding[3],
-                blob_dimensions.hist_height + blob_dimensions.margin[0]
+                    + blob_dimensions.padding.right
+                    + blob_dimensions.padding.left,
+                blob_dimensions.hist_height + blob_dimensions.margin.top
             ),
         ))
         .add(
             category_legend_full(scatter_data.categories, options.show_legend.clone())
                 .set("transform", format!("translate({}, {})", legend_x, 10.0)),
         );
+
+    document
+}
+
+pub fn plot_grid(
+    grid_size: GridSize,
+    scatter_data: Vec<ScatterData>,
+    options: &cli::PlotOptions,
+) -> Document {
+    let height = grid_size.row_height - grid_size.margin.top - grid_size.margin.bottom;
+
+    let width = grid_size.col_width - grid_size.margin.left - grid_size.margin.right;
+
+    let mut charts = vec![];
+
+    let range = [
+        grid_size.margin.left,
+        grid_size.col_width - grid_size.padding.left - grid_size.padding.right,
+    ];
+    // let y_range = [
+    //     grid_size.row_height - grid_size.margin.top - grid_size.margin.bottom,
+    //     grid_size.margin.bottom,
+    // ];
+    let y_range = [
+        grid_size.row_height - grid_size.padding.top,
+        grid_size.padding.bottom + grid_size.padding.top,
+    ];
+
+    for (i, data) in scatter_data.iter().enumerate() {
+        let x_opts = data.x.clone();
+        let y_opts = data.y.clone();
+
+        charts.push(Chart {
+            axes: ChartAxes {
+                x: Some(AxisOptions {
+                    position: Position::BOTTOM,
+                    height,
+                    // label: axes["x"].clone(),
+                    padding: [grid_size.padding.left, grid_size.padding.right],
+                    offset: grid_size.row_height + grid_size.padding.top + grid_size.padding.bottom
+                        - grid_size.margin.bottom,
+                    scale: x_opts.scale.clone(),
+                    domain: x_opts.domain.clone(),
+                    // range: [
+                    //     grid_size.margin.left,
+                    //     grid_size.col_width - grid_size.margin.left - grid_size.margin.right,
+                    // ],
+                    range,
+                    clamp: x_opts.clamp.clone(),
+                    font_size: 15.0,
+                    weight: 1.0,
+                    tick_count: 2,
+                    major_ticks: Some(TickOptions {
+                        font_size: 10.0,
+                        weight: 1.0,
+                        length: 8.0,
+                        ..Default::default()
+                    }),
+                    minor_ticks: Some(TickOptions {
+                        font_size: 8.0,
+                        weight: 1.0,
+                        length: 5.0,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                y: Some(AxisOptions {
+                    position: Position::LEFT,
+                    height: width,
+                    // label: axes["x"].clone(),
+                    offset: grid_size.margin.left,
+                    padding: [grid_size.padding.top, grid_size.padding.bottom],
+                    scale: y_opts.scale.clone(),
+                    domain: y_opts.domain.clone(),
+                    // range: [
+                    //     grid_size.row_height - grid_size.margin.top - grid_size.margin.bottom,
+                    //     grid_size.margin.top,
+                    // ],
+                    range: y_range,
+                    clamp: y_opts.clamp.clone(),
+                    font_size: 15.0,
+                    weight: 1.0,
+                    tick_count: 2,
+                    major_ticks: Some(TickOptions {
+                        font_size: 10.0,
+                        weight: 1.0,
+                        length: 8.0,
+                        ..Default::default()
+                    }),
+                    minor_ticks: Some(TickOptions {
+                        font_size: 8.0,
+                        weight: 1.0,
+                        length: 5.0,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            scatter_data: Some(data.clone()),
+            dimensions: Dimensions {
+                height: grid_size.row_height,
+                width: grid_size.col_width,
+                margin: grid_size.margin,
+                padding: grid_size.padding,
+            },
+            ..Default::default()
+        });
+    }
+
+    let legend_x = match options.show_legend {
+        ShowLegend::Compact => grid_size.width - 100.0,
+        _ => grid_size.width - 185.0,
+    };
+
+    let mut document = Document::new()
+        .set("viewBox", (0, 0, grid_size.width, grid_size.height))
+        .add(
+            Rectangle::new()
+                .set("fill", "#ffffff")
+                .set("stroke", "none")
+                .set("width", grid_size.width)
+                .set("height", grid_size.height),
+        );
+    let mut i = 0;
+    for chart in charts {
+        let row = i / grid_size.num_cols;
+        let col = i % grid_size.num_cols;
+        let x_offset = col as f64 * grid_size.col_width + grid_size.outer_margin.left;
+        let y_offset = row as f64 * grid_size.row_height + grid_size.outer_margin.top;
+        document = document.add(
+            chart
+                .svg(
+                    grid_size.margin.left,
+                    grid_size.margin.bottom + grid_size.padding.bottom,
+                )
+                .set(
+                    "transform",
+                    format!("translate({}, {})", x_offset, y_offset),
+                ),
+        );
+        i += 1;
+    }
+    // .add(
+    //     category_legend_full(scatter_data.categories, options.show_legend.clone())
+    //         .set("transform", format!("translate({}, {})", legend_x, 10.0)),
+    // );
 
     document
 }
@@ -647,7 +796,7 @@ pub fn legend(
     let height = scatter_data.categories.len() * 26;
 
     let mut width =
-        blob_dimensions.hist_width + blob_dimensions.margin[3] + blob_dimensions.padding[3];
+        blob_dimensions.hist_width + blob_dimensions.margin.left + blob_dimensions.padding.left;
 
     width = match options.show_legend {
         ShowLegend::Compact => width,
