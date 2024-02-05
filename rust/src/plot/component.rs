@@ -73,7 +73,7 @@ impl Default for LegendEntry {
     }
 }
 
-fn font_family(fallback: &str) -> String {
+pub fn font_family(fallback: &str) -> String {
     match env::var("FONT_FAMILY") {
         Ok(family) => format!("{}, {}", family, fallback),
         _ => fallback.to_string(),
@@ -1076,7 +1076,8 @@ pub fn chart_axis(plot_axis: &AxisOptions) -> (Group, Group) {
     if plot_axis.minor_ticks.is_some() {
         let minor_ticks = create_axis_ticks(&plot_axis, TickStatus::Minor);
         for tick in minor_ticks {
-            minor_tick_group = if major_tick_count < 2 {
+            minor_tick_group = if major_tick_count == 0 {
+                major_gridline_group = major_gridline_group.add(tick.gridline);
                 minor_tick_group.add(tick.path).add(tick.label)
             } else {
                 minor_tick_group.add(tick.path)

@@ -155,7 +155,7 @@ pub fn plot(dimensions: Dimensions, line_data: LineData, options: &cli::PlotOpti
                 .set("width", width)
                 .set("height", height),
         )
-        .add(cumulative.svg(0.0, 0.0).set(
+        .add(cumulative.svg(0.0, 0.0, None).set(
             "transform",
             format!(
                 "translate({}, {})",

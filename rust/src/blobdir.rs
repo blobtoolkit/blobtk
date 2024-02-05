@@ -526,6 +526,21 @@ pub fn parse_field_string(
     Ok((keys, values))
 }
 
+pub fn parse_field_identifiers(id: String, blobdir: &PathBuf) -> Result<Vec<String>, error::Error> {
+    let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
+        Some(reader) => reader,
+        None => {
+            return Err(error::Error::FileNotFound(format!(
+                "{}/{}.json",
+                &blobdir.to_str().unwrap(),
+                &id
+            )))
+        }
+    };
+    let field: Field<String> = serde_json::from_reader(reader).expect("unable to parse json");
+    Ok(field.values().to_owned())
+}
+
 pub fn parse_filters(
     options: &cli::PlotOptions,
     plot_meta: Option<&HashMap<String, String>>,
@@ -801,6 +816,14 @@ pub fn apply_filter_cat_tuple(
     output
 }
 
+pub fn apply_filter_string(values: &Vec<String>, indices: &Vec<usize>) -> Vec<String> {
+    let mut output = vec![];
+    for i in indices {
+        output.push(values[i.clone()].clone())
+    }
+    output
+}
+
 pub fn get_plot_values(
     meta: &Meta,
     blobdir: &PathBuf,
@@ -852,7 +875,7 @@ pub fn get_window_values(
     blobdir: &PathBuf,
     plot_map: &HashMap<String, String>,
     wanted_indices: &Vec<usize>,
-    window_size: Option<String>,
+    window_size: &Option<String>,
 ) -> Result<
     (
         HashMap<String, Vec<Vec<f64>>>,
@@ -867,8 +890,8 @@ pub fn get_window_values(
     let field_list = meta.field_list.clone().unwrap();
     for (axis, id) in plot_map {
         let window_id = match window_size {
-            Some(ref size) => format!("{}_windows_{}", id, size),
-            None => format!("{}_windows", id),
+            Some(ref size) if size != "0.1" => format!("{}_windows_{}", id, size),
+            _ => format!("{}_windows", id),
         };
 
         let field_meta_option = field_list.get(&window_id);

@@ -284,6 +284,9 @@ pub struct PlotOptions {
     #[arg(long)]
     #[clap(value_enum)]
     pub shape: Option<Shape>,
+    /// Window size for grid shape plot
+    #[arg(long = "window-size", short = 'w')]
+    pub window_size: Option<String>,
     /// Output filename
     #[arg(long, short = 'o', default_value_t = String::from("output.svg"))]
     pub output: String,

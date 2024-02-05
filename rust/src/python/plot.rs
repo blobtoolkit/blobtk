@@ -87,6 +87,7 @@ fn convert_hashmap_to_options(py: Python<'_>, map: HashMap<String, PyObject>) ->
     let blobdir = extract_to_pathbuf(py, &map, "blobdir");
     let view = extract_to_view(py, &map, "view");
     let shape = extract_to_option_shape(py, &map, "shape");
+    let window_size = extract_to_option_string(py, &map, "window_size");
     let output = extract_to_option_string(py, &map, "output");
     let filter = extract_to_option_vec_string(py, &map, "filter");
     let segments = extract_to_option_usize(py, &map, "segments");
@@ -113,6 +114,7 @@ fn convert_hashmap_to_options(py: Python<'_>, map: HashMap<String, PyObject>) ->
         blobdir,
         view,
         shape,
+        window_size,
         output: output.unwrap_or(String::from("output.svg")),
         filter: filter.unwrap_or_default(),
         segments: segments.unwrap_or(1000),

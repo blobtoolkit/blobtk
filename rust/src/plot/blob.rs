@@ -3,7 +3,8 @@ use std::collections::HashMap;
 
 use std::str::FromStr;
 
-use svg::node::element::{Group, Rectangle};
+use svg::node::element::{Group, Rectangle, Text};
+use svg::node::Text as nodeText;
 use svg::Document;
 
 use crate::blobdir::FieldMeta;
@@ -15,7 +16,7 @@ use plot::category::Category;
 
 use super::axis::{AxisName, AxisOptions, ChartAxes, Position, Scale, TickOptions};
 use super::chart::{Chart, Dimensions, TopRightBottomLeft};
-use super::component::{legend_group, LegendEntry, LegendShape};
+use super::component::{font_family, legend_group, LegendEntry, LegendShape};
 use super::data::{Bin, HistogramData, Reducer, ScatterData, ScatterPoint};
 use super::{GridSize, ShowLegend};
 
@@ -26,6 +27,7 @@ pub struct BlobData {
     pub z: Vec<f64>,
     pub cat: Vec<Option<usize>>,
     pub cat_order: Vec<Category>,
+    pub title: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -260,6 +262,9 @@ fn set_domain(
             domain[1] *= 0.1;
         }
     }
+    // if domain[0] == 0.005 {
+    //     domain = [0.0, 1.0];
+    // }
     (domain, clamp_value)
 }
 
@@ -336,30 +341,34 @@ pub fn blob_points(
     };
     let z_scaled = scale_values(&blob_data.z, &z_axis);
     let mut points = vec![];
+    let mut fg_points = vec![];
     match options.shape {
         Some(Shape::Grid) => {
             for (i, x) in x_scaled.iter().enumerate() {
                 if let Some(cat_index) = blob_data.cat[i] {
                     let cat = blob_data.cat_order[cat_index].clone();
-                    points.push(ScatterPoint {
+                    let point = ScatterPoint {
                         x: *x,
                         y: y_scaled[i],
-                        z: z_scaled[i],
+                        z: z_scaled[i] * 1.5,
                         label: Some(cat.title.clone()),
                         color: Some(cat.color.clone()),
                         cat_index,
                         data_index: i,
-                    })
+                    };
+                    points.push(point.clone());
+                    fg_points.push(point.clone());
                 } else {
                     points.push(ScatterPoint {
                         x: *x,
                         y: y_scaled[i],
-                        z: z_scaled[i],
+                        z: z_scaled[i] * 1.5,
                         data_index: i,
                         ..Default::default()
                     })
                 }
             }
+            points.extend(fg_points);
         }
         _ => {
             let cat_order = blob_data.cat_order.clone();
@@ -598,6 +607,8 @@ pub fn plot(
         _ => width - 185.0,
     };
 
+    let opacity = 0.6;
+
     let document = Document::new()
         .set("viewBox", (0, 0, width, height))
         .add(
@@ -607,7 +618,7 @@ pub fn plot(
                 .set("width", width)
                 .set("height", height),
         )
-        .add(scatter.svg(0.0, 0.0).set(
+        .add(scatter.svg(0.0, 0.0, Some(opacity)).set(
             "transform",
             format!(
                 "translate({}, {})",
@@ -615,14 +626,14 @@ pub fn plot(
                 blob_dimensions.hist_height + blob_dimensions.margin.top
             ),
         ))
-        .add(x_hist.svg(0.0, 0.0).set(
+        .add(x_hist.svg(0.0, 0.0, Some(opacity)).set(
             "transform",
             format!(
                 "translate({}, {})",
                 blob_dimensions.margin.left, blob_dimensions.margin.top
             ),
         ))
-        .add(y_hist.svg(0.0, 0.0).set(
+        .add(y_hist.svg(0.0, 0.0, Some(opacity)).set(
             "transform",
             format!(
                 "translate({}, {})",
@@ -644,8 +655,12 @@ pub fn plot(
 pub fn plot_grid(
     grid_size: GridSize,
     scatter_data: Vec<ScatterData>,
+    titles: Vec<Option<String>>,
+    labels: (String, String),
     options: &cli::PlotOptions,
 ) -> Document {
+    let x_label = labels.0;
+    let y_label = labels.1;
     let height = grid_size.row_height - grid_size.margin.top - grid_size.margin.bottom;
 
     let width = grid_size.col_width - grid_size.margin.left - grid_size.margin.right;
@@ -654,18 +669,30 @@ pub fn plot_grid(
 
     let range = [
         grid_size.margin.left,
-        grid_size.col_width - grid_size.padding.left - grid_size.padding.right,
+        grid_size.col_width
+            - grid_size.padding.right
+            - grid_size.padding.left
+            - grid_size.margin.right,
     ];
-    // let y_range = [
-    //     grid_size.row_height - grid_size.margin.top - grid_size.margin.bottom,
-    //     grid_size.margin.bottom,
-    // ];
+    let offset = grid_size.row_height - grid_size.margin.bottom; // - grid_size.margin.bottom;
+                                                                 // let y_range = [
+                                                                 //     grid_size.row_height - grid_size.margin.top - grid_size.margin.bottom,
+                                                                 //     grid_size.margin.bottom,
+                                                                 // ];
     let y_range = [
-        grid_size.row_height - grid_size.padding.top,
-        grid_size.padding.bottom + grid_size.padding.top,
+        grid_size.row_height
+            - grid_size.padding.bottom
+            - grid_size.padding.top
+            - grid_size.margin.bottom,
+        grid_size.margin.top,
     ];
 
+    let font_size = 20.0;
+    let line_weight = 2.0;
+
     for (i, data) in scatter_data.iter().enumerate() {
+        let col = i / grid_size.num_rows;
+        let row = i % grid_size.num_rows;
         let x_opts = data.x.clone();
         let y_opts = data.y.clone();
 
@@ -674,29 +701,24 @@ pub fn plot_grid(
                 x: Some(AxisOptions {
                     position: Position::BOTTOM,
                     height,
-                    // label: axes["x"].clone(),
                     padding: [grid_size.padding.left, grid_size.padding.right],
-                    offset: grid_size.row_height + grid_size.padding.top + grid_size.padding.bottom
-                        - grid_size.margin.bottom,
+                    offset,
                     scale: x_opts.scale.clone(),
                     domain: x_opts.domain.clone(),
-                    // range: [
-                    //     grid_size.margin.left,
-                    //     grid_size.col_width - grid_size.margin.left - grid_size.margin.right,
-                    // ],
                     range,
                     clamp: x_opts.clamp.clone(),
-                    font_size: 15.0,
+                    font_size,
                     weight: 1.0,
-                    tick_count: 2,
+                    tick_count: 3,
+                    tick_labels: row == grid_size.num_rows - 1 || i == grid_size.num_items - 1,
                     major_ticks: Some(TickOptions {
-                        font_size: 10.0,
+                        font_size: font_size * 0.75,
                         weight: 1.0,
                         length: 8.0,
                         ..Default::default()
                     }),
                     minor_ticks: Some(TickOptions {
-                        font_size: 8.0,
+                        font_size: font_size * 0.75,
                         weight: 1.0,
                         length: 5.0,
                         ..Default::default()
@@ -706,28 +728,24 @@ pub fn plot_grid(
                 y: Some(AxisOptions {
                     position: Position::LEFT,
                     height: width,
-                    // label: axes["x"].clone(),
                     offset: grid_size.margin.left,
                     padding: [grid_size.padding.top, grid_size.padding.bottom],
                     scale: y_opts.scale.clone(),
                     domain: y_opts.domain.clone(),
-                    // range: [
-                    //     grid_size.row_height - grid_size.margin.top - grid_size.margin.bottom,
-                    //     grid_size.margin.top,
-                    // ],
                     range: y_range,
                     clamp: y_opts.clamp.clone(),
-                    font_size: 15.0,
+                    font_size,
                     weight: 1.0,
-                    tick_count: 2,
+                    tick_count: 3,
+                    tick_labels: col == 0,
                     major_ticks: Some(TickOptions {
-                        font_size: 10.0,
+                        font_size: font_size * 0.75,
                         weight: 1.0,
                         length: 8.0,
                         ..Default::default()
                     }),
                     minor_ticks: Some(TickOptions {
-                        font_size: 8.0,
+                        font_size: font_size * 0.75,
                         weight: 1.0,
                         length: 5.0,
                         ..Default::default()
@@ -752,6 +770,8 @@ pub fn plot_grid(
         _ => grid_size.width - 185.0,
     };
 
+    let processed_font_family = font_family("Roboto, Open sans, DejaVu Sans, Arial, sans-serif");
+
     let mut document = Document::new()
         .set("viewBox", (0, 0, grid_size.width, grid_size.height))
         .add(
@@ -760,30 +780,92 @@ pub fn plot_grid(
                 .set("stroke", "none")
                 .set("width", grid_size.width)
                 .set("height", grid_size.height),
+        )
+        .add(
+            Text::new()
+                .set("font-family", processed_font_family.clone())
+                .set("font-size", font_size * 1.25)
+                .set("text-anchor", "middle")
+                .set("dominant-baseline", "middle")
+                .set("stroke", "none")
+                // .set("fill", options.font_color.clone())
+                .set(
+                    "transform",
+                    format!(
+                        "translate({:?}, {:?}) rotate({:?})",
+                        grid_size.outer_margin.left / 2.0,
+                        (grid_size.height
+                            - grid_size.outer_margin.bottom
+                            - grid_size.outer_margin.top)
+                            / 2.0
+                            + grid_size.outer_margin.top,
+                        90
+                    ),
+                )
+                .add(nodeText::new(y_label)),
+        )
+        .add(
+            Text::new()
+                .set("font-family", processed_font_family.clone())
+                .set("font-size", font_size * 1.25)
+                .set("text-anchor", "middle")
+                .set("dominant-baseline", "middle")
+                .set("stroke", "none")
+                // .set("fill", options.font_color.clone())
+                .set(
+                    "transform",
+                    format!(
+                        "translate({:?}, {:?})",
+                        grid_size.outer_margin.left
+                            + (grid_size.width
+                                - grid_size.outer_margin.left
+                                - grid_size.outer_margin.right)
+                                / 2.0,
+                        grid_size.height - grid_size.outer_margin.bottom / 2.0
+                    ),
+                )
+                .add(nodeText::new(x_label)),
         );
     let mut i = 0;
     for chart in charts {
-        let row = i / grid_size.num_cols;
-        let col = i % grid_size.num_cols;
+        let col = i / grid_size.num_rows;
+        let row = i % grid_size.num_rows;
         let x_offset = col as f64 * grid_size.col_width + grid_size.outer_margin.left;
         let y_offset = row as f64 * grid_size.row_height + grid_size.outer_margin.top;
-        document = document.add(
-            chart
-                .svg(
-                    grid_size.margin.left,
-                    grid_size.margin.bottom + grid_size.padding.bottom,
+        let mut group =
+            Group::new().add(chart.svg(grid_size.margin.left, grid_size.margin.top, None));
+        if let Some(ref title) = titles[i] {
+            group = group
+                .add(
+                    Text::new()
+                        .set("font-family", processed_font_family.clone())
+                        .set("font-size", font_size * 0.75)
+                        .set("text-anchor", "middle")
+                        .set("dominant-baseline", "hanging")
+                        .set("stroke", "none")
+                        // .set("fill", options.font_color.clone())
+                        .set(
+                            "transform",
+                            format!(
+                                "translate({:?}, {:?})",
+                                grid_size.margin.left
+                                    + (grid_size.col_width
+                                        - grid_size.margin.left
+                                        - grid_size.margin.right)
+                                        / 2.0,
+                                0.0
+                            ),
+                        )
+                        .add(nodeText::new(title)),
                 )
                 .set(
                     "transform",
                     format!("translate({}, {})", x_offset, y_offset),
-                ),
-        );
+                );
+        }
+        document = document.add(group);
         i += 1;
     }
-    // .add(
-    //     category_legend_full(scatter_data.categories, options.show_legend.clone())
-    //         .set("transform", format!("translate({}, {})", legend_x, 10.0)),
-    // );
 
     document
 }

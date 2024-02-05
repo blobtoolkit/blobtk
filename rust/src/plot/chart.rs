@@ -91,8 +91,11 @@ impl Default for Chart {
 }
 
 impl Chart {
-    pub fn svg(self, x_offset: f64, y_offset: f64) -> Group {
-        let opacity = 0.6;
+    pub fn svg(self, x_offset: f64, y_offset: f64, opacity: Option<f64>) -> Group {
+        let opacity = match opacity {
+            Some(o) => o,
+            None => 1.0,
+        };
         let mut group = Group::new();
         let mut axis_group = Group::new();
         let mut gridline_group = Group::new();
@@ -133,7 +136,7 @@ impl Chart {
                             "fill",
                             point.color.clone().unwrap_or_else(|| "#ffffff".to_string()),
                         )
-                        .set("stroke", "#999999")
+                        .set("stroke", "#aaaaaa")
                         .set("fill-opacity", opacity),
                 );
             }
