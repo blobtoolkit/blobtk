@@ -25,6 +25,9 @@ pub mod fastq;
 /// Filter files based on a list of sequence IDs.
 pub mod filter;
 
+/// Index files for a GenomeHubs instance.
+pub mod index;
+
 /// Functions for file/terminal IO.
 pub mod io;
 

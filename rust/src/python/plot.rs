@@ -5,9 +5,9 @@ use crate::cli::{self, PlotOptions, View};
 use crate::plot::{plot_blob, plot_cumulative, plot_legend, plot_snail};
 use crate::python::utils::{
     extract_to_option_f64, extract_to_option_origin, extract_to_option_palette,
-    extract_to_option_reducer, extract_to_option_scale, extract_to_option_showlegend,
-    extract_to_option_string, extract_to_option_usize, extract_to_option_vec_string,
-    extract_to_pathbuf, extract_to_view,
+    extract_to_option_reducer, extract_to_option_scale, extract_to_option_shape,
+    extract_to_option_showlegend, extract_to_option_string, extract_to_option_usize,
+    extract_to_option_vec_string, extract_to_pathbuf, extract_to_view,
 };
 use pyo3::prelude::*;
 
@@ -86,6 +86,8 @@ pub fn plot_with_options(options: &PlotOptions) -> PyResult<()> {
 fn convert_hashmap_to_options(py: Python<'_>, map: HashMap<String, PyObject>) -> PlotOptions {
     let blobdir = extract_to_pathbuf(py, &map, "blobdir");
     let view = extract_to_view(py, &map, "view");
+    let shape = extract_to_option_shape(py, &map, "shape");
+    let window_size = extract_to_option_string(py, &map, "window_size");
     let output = extract_to_option_string(py, &map, "output");
     let filter = extract_to_option_vec_string(py, &map, "filter");
     let segments = extract_to_option_usize(py, &map, "segments");
@@ -111,6 +113,8 @@ fn convert_hashmap_to_options(py: Python<'_>, map: HashMap<String, PyObject>) ->
     PlotOptions {
         blobdir,
         view,
+        shape,
+        window_size,
         output: output.unwrap_or(String::from("output.svg")),
         filter: filter.unwrap_or_default(),
         segments: segments.unwrap_or(1000),

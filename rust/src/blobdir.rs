@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::f64::{INFINITY, NEG_INFINITY};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -15,6 +16,7 @@ use url::Url;
 
 use crate::cli;
 use crate::error;
+use crate::utils::{max_float, min_float};
 
 pub use cli::PlotOptions;
 
@@ -385,6 +387,50 @@ pub fn parse_field_cat(
     Ok(values)
 }
 
+pub fn parse_field_cat_windows(
+    id: String,
+    blobdir: &PathBuf,
+    wanted_indices: &Vec<usize>,
+) -> Result<Vec<Vec<Option<(String, usize)>>>, error::Error> {
+    let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
+        Some(reader) => reader,
+        None => {
+            return Err(error::Error::FileNotFound(format!(
+                "{}/{}.json",
+                &blobdir.to_str().unwrap(),
+                &id
+            )))
+        }
+    };
+    let field: Field<Vec<Vec<Option<usize>>>> =
+        serde_json::from_reader(reader).expect("unable to parse json");
+    let mut values: Vec<Vec<Option<(String, usize)>>> = vec![];
+    let keys = field.keys.clone();
+    let cat_slot;
+    if let Some(slot) = field.category_slot {
+        cat_slot = slot as usize;
+    } else {
+        // TODO: raise error here
+        return Ok(values);
+    }
+    let indices: HashSet<&usize> = HashSet::from_iter(wanted_indices);
+    for (i, seq) in field.values().iter().enumerate() {
+        if !indices.contains(&i) {
+            continue;
+        }
+        let mut windows = vec![];
+        for arr in seq {
+            let value = match arr[cat_slot] {
+                Some(v) => Some((keys[v].clone(), v)),
+                None => None,
+            };
+            windows.push(value);
+        }
+        values.push(windows);
+    }
+    Ok(values)
+}
+
 pub fn parse_field_float(id: String, blobdir: &PathBuf) -> Result<Vec<f64>, error::Error> {
     let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
         Some(reader) => reader,
@@ -399,6 +445,42 @@ pub fn parse_field_float(id: String, blobdir: &PathBuf) -> Result<Vec<f64>, erro
     let field: Field<f64> = serde_json::from_reader(reader).expect("unable to parse json");
     let values = field.values().clone();
     Ok(values)
+}
+
+pub fn parse_field_float_windows(
+    id: String,
+    blobdir: &PathBuf,
+    wanted_indices: &Vec<usize>,
+) -> Result<(Vec<Vec<f64>>, f64, f64), error::Error> {
+    let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
+        Some(reader) => reader,
+        None => {
+            return Err(error::Error::FileNotFound(format!(
+                "{}/{}.json",
+                &blobdir.to_str().unwrap(),
+                &id
+            )))
+        }
+    };
+    let field: Field<Vec<Vec<f64>>> =
+        serde_json::from_reader(reader).expect("unable to parse json");
+    let mut values = vec![];
+    let indices: HashSet<&usize> = HashSet::from_iter(wanted_indices);
+    let mut min_value = INFINITY;
+    let mut max_value = NEG_INFINITY;
+    for (i, seq) in field.values().iter().enumerate() {
+        if !indices.contains(&i) {
+            continue;
+        }
+        let mut windows = vec![];
+        for arr in seq {
+            windows.push(arr[0]);
+            min_value = min_float(min_value, arr[0]);
+            max_value = max_float(max_value, arr[0]);
+        }
+        values.push(windows);
+    }
+    Ok((values, min_value, max_value))
 }
 
 pub fn parse_field_int(id: String, blobdir: &PathBuf) -> Result<Vec<usize>, error::Error> {
@@ -442,6 +524,21 @@ pub fn parse_field_string(
         .map(|i| field.keys[i.to_owned()].clone())
         .collect();
     Ok((keys, values))
+}
+
+pub fn parse_field_identifiers(id: String, blobdir: &PathBuf) -> Result<Vec<String>, error::Error> {
+    let reader = match file_reader(blobdir, &format!("{}.json", &id)) {
+        Some(reader) => reader,
+        None => {
+            return Err(error::Error::FileNotFound(format!(
+                "{}/{}.json",
+                &blobdir.to_str().unwrap(),
+                &id
+            )))
+        }
+    };
+    let field: Field<String> = serde_json::from_reader(reader).expect("unable to parse json");
+    Ok(field.values().to_owned())
 }
 
 pub fn parse_filters(
@@ -678,6 +775,17 @@ pub fn apply_filter_int(values: &Vec<usize>, indices: &Vec<usize>) -> Vec<usize>
     output
 }
 
+pub fn apply_filter_option_int(values: &Vec<Option<usize>>, indices: &Vec<usize>) -> Vec<usize> {
+    let mut output = vec![];
+    for i in indices {
+        output.push(match values[i.clone()] {
+            Some(v) => v,
+            _ => 0,
+        })
+    }
+    output
+}
+
 pub fn apply_filter_busco(
     values: &Vec<Vec<BuscoGene>>,
     indices: &Vec<usize>,
@@ -701,6 +809,14 @@ pub fn apply_filter_cat_tuple(
     values: &Vec<(String, usize)>,
     indices: &Vec<usize>,
 ) -> Vec<(String, usize)> {
+    let mut output = vec![];
+    for i in indices {
+        output.push(values[i.clone()].clone())
+    }
+    output
+}
+
+pub fn apply_filter_string(values: &Vec<String>, indices: &Vec<usize>) -> Vec<String> {
     let mut output = vec![];
     for i in indices {
         output.push(values[i.clone()].clone())
@@ -752,4 +868,80 @@ pub fn get_plot_values(
         };
     }
     Ok((plot_values, cat_values))
+}
+
+pub fn get_window_values(
+    meta: &Meta,
+    blobdir: &PathBuf,
+    plot_map: &HashMap<String, String>,
+    wanted_indices: &Vec<usize>,
+    window_size: &Option<String>,
+) -> Result<
+    (
+        HashMap<String, Vec<Vec<f64>>>,
+        Vec<Vec<Option<(String, usize)>>>,
+        HashMap<String, [f64; 2]>,
+    ),
+    error::Error,
+> {
+    let mut plot_values = HashMap::new();
+    let mut axis_limits = HashMap::new();
+    let mut cat_values = vec![];
+    let field_list = meta.field_list.clone().unwrap();
+    for (axis, id) in plot_map {
+        let window_id = match window_size {
+            Some(ref size) if size != "0.1" => format!("{}_windows_{}", id, size),
+            _ => format!("{}_windows", id),
+        };
+
+        let field_meta_option = field_list.get(&window_id);
+        match field_meta_option {
+            Some(field_meta) => {
+                let field = field_meta.clone();
+
+                match field.datatype {
+                    Some(Datatype::Mixed) => {
+                        let (values, min_value, max_value) = parse_field_float_windows(
+                            field_meta.id.clone(),
+                            blobdir,
+                            wanted_indices,
+                        )?;
+                        plot_values.insert(axis.clone(), values);
+                        axis_limits.insert(axis.clone(), [min_value, max_value]);
+                    }
+                    Some(Datatype::String) => {
+                        cat_values = parse_field_cat_windows(
+                            field_meta.id.clone(),
+                            blobdir,
+                            wanted_indices,
+                        )?;
+                        // cat_values.insert(axis.clone(), values);
+                    }
+                    // Some(Datatype::Integer) => {
+                    //     let values: Vec<f64> =
+                    //         parse_field_int_windows(field_meta.id.clone(), blobdir)?
+                    //             .iter()
+                    //             .map(|x| x.clone() as f64)
+                    //             .collect();
+                    //     plot_values.insert(axis.clone(), values);
+                    // }
+                    // Some(Datatype::String) => {
+                    //     if field.data.is_some() {
+                    //         cat_values = parse_field_cat_windows(field_meta.id.clone(), blobdir)?;
+                    //     }
+                    // }
+                    Some(_) => (),
+                    None => (),
+                }
+            }
+            None => {
+                if axis == "cat" && id == "_" {
+                    cat_values = vec![vec![Some(("blank".to_string(), 0)); meta.records]]
+                } else {
+                    ()
+                }
+            }
+        };
+    }
+    Ok((plot_values, cat_values, axis_limits))
 }

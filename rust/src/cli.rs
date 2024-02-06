@@ -65,6 +65,9 @@ pub enum SubCommand {
     /// Filter files based on list of sequence names.
     /// Called as `blobtk filter`
     Filter(FilterOptions),
+    /// [experimental] Index files for GenomeHubs.
+    /// Called as `blobtk index`
+    Index(IndexOptions),
     /// Process a BlobDir and produce static plots.
     /// Called as `blobtk plot`
     Plot(PlotOptions),
@@ -168,6 +171,18 @@ pub struct FilterOptions {
     pub read_list: Option<PathBuf>,
 }
 
+/// Options to pass to `blobtk index`
+#[derive(Parser, Debug)]
+// #[pyclass]
+pub struct IndexOptions {
+    /// Flag to generate JSON schema
+    #[arg(long, short = 'g')]
+    pub schema: bool,
+    /// Output schema file name
+    #[arg(long, short = 'O')]
+    pub out: Option<PathBuf>,
+}
+
 #[derive(ValueEnum, Clone, Debug, Default)]
 #[pyclass]
 pub enum View {
@@ -187,6 +202,25 @@ impl FromStr for View {
             "legend" => Ok(View::Legend),
             "snail" => Ok(View::Snail),
             _ => Ok(View::Blob),
+        }
+    }
+}
+
+#[derive(ValueEnum, Clone, Debug, Default)]
+#[pyclass]
+pub enum Shape {
+    #[default]
+    Circle,
+    Grid,
+}
+
+impl FromStr for Shape {
+    type Err = ();
+    fn from_str(input: &str) -> Result<Shape, Self::Err> {
+        match input {
+            "circle" => Ok(Shape::Circle),
+            "grid" => Ok(Shape::Grid),
+            _ => Ok(Shape::Circle),
         }
     }
 }
@@ -246,6 +280,13 @@ pub struct PlotOptions {
     #[arg(long, short = 'v')]
     #[clap(value_enum)]
     pub view: View,
+    /// Plot shape for blob plot
+    #[arg(long)]
+    #[clap(value_enum)]
+    pub shape: Option<Shape>,
+    /// Window size for grid shape plot
+    #[arg(long = "window-size", short = 'w')]
+    pub window_size: Option<String>,
     /// Output filename
     #[arg(long, short = 'o', default_value_t = String::from("output.svg"))]
     pub output: String,

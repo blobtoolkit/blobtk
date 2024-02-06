@@ -25,6 +25,7 @@ use nom::{
     IResult,
 };
 use regex::Regex;
+use schemars::{schema_for, JsonSchema};
 use serde;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -464,7 +465,7 @@ pub fn parse_gbif(gbif_backbone: PathBuf) -> Result<Nodes, anyhow::Error> {
     Ok(Nodes { nodes, children })
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub enum GHubsFileFormat {
     #[serde(rename = "csv")]
     CSV,
@@ -487,7 +488,7 @@ impl FromStr for GHubsFileFormat {
 }
 
 // Value may be String or Vec of Strings
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum StringOrVec {
     Single(String),
@@ -495,7 +496,7 @@ pub enum StringOrVec {
 }
 
 // Value may be u32 or Vec of u32
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum UsizeOrVec {
     Single(usize),
@@ -503,7 +504,7 @@ pub enum UsizeOrVec {
 }
 
 // Value may be PathBuf or Vec of PathBuf
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum PathBufOrVec {
     Single(PathBuf),
@@ -511,7 +512,7 @@ pub enum PathBufOrVec {
 }
 
 // Field types
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
 pub enum FieldType {
     #[serde(rename = "byte")]
     Byte,
@@ -545,7 +546,7 @@ pub enum FieldType {
 }
 
 /// GenomeHubs file configuration options
-#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct GHubsFileConfig {
     /// File format
     pub format: GHubsFileFormat,
@@ -558,7 +559,7 @@ pub struct GHubsFileConfig {
 }
 
 /// GenomeHubs field constraint configuration options
-#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct ConstraintConfig {
     // List of valid values
     #[serde(rename = "enum")]
@@ -572,7 +573,7 @@ pub struct ConstraintConfig {
 }
 
 // Field types
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub enum FieldScale {
     #[default]
     #[serde(rename = "linear")]
@@ -586,7 +587,7 @@ pub enum FieldScale {
 }
 
 /// GenomeHubs value bins configuration options
-#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct BinsConfig {
     // List of valid values
     pub count: u32,
@@ -601,7 +602,7 @@ pub struct BinsConfig {
 }
 
 /// GenomeHubs field display configuration options
-#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct DisplayConfig {
     // Display group
     pub group: Option<String>,
@@ -612,7 +613,7 @@ pub struct DisplayConfig {
 }
 
 /// GenomeHubs field status values
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub enum FieldStatus {
     // Temporary
     #[default]
@@ -621,7 +622,7 @@ pub enum FieldStatus {
 }
 
 /// GenomeHubs field configuration options
-#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct GHubsFieldConfig {
     // Default settings for value bins
     pub bins: Option<BinsConfig>,
@@ -729,7 +730,7 @@ fn merge_attributes(
 }
 
 /// GenomeHubs configuration options
-#[derive(Default, Serialize, Deserialize, Clone, Debug)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug, JsonSchema)]
 pub struct GHubsConfig {
     /// File configuration options
     pub file: Option<GHubsFileConfig>,
