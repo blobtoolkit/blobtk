@@ -391,6 +391,33 @@ attributes:
     source: derived
     status: active
     destination: nested
+  gc_zscore:
+    display_name: GC z-score
+    display_group: summary
+    display_level: 1
+    description: Assembly-local GC z-score computed from the full assembly distribution for the corresponding feature value.
+    type: half_float
+    source: derived
+    status: active
+    destination: nested
+  gc_rz:
+    display_name: GC robust z-score
+    display_group: summary
+    display_level: 1
+    description: Assembly-local GC robust z-score computed from the median and MAD of the full assembly distribution.
+    type: half_float
+    source: derived
+    status: active
+    destination: nested
+  gc_minmax:
+    display_name: GC min-max
+    display_group: summary
+    display_level: 1
+    description: Assembly-local GC min-max transform scaled into the observed assembly range.
+    type: half_float
+    source: derived
+    status: active
+    destination: nested
   gc_var:
     display_name: GC Variance
     display_group: summary
@@ -406,6 +433,33 @@ attributes:
     display_level: 1
     description: Proportion of ambiguous 'N' bases in the sequence or feature, expressed as a proportion in the range 0-1.
     type: float
+    source: derived
+    status: active
+    destination: nested
+  n_zscore:
+    display_name: N z-score
+    display_group: summary
+    display_level: 1
+    description: Assembly-local N z-score computed from the full assembly distribution for the corresponding feature value.
+    type: half_float
+    source: derived
+    status: active
+    destination: nested
+  n_rz:
+    display_name: N robust z-score
+    display_group: summary
+    display_level: 1
+    description: Assembly-local N robust z-score computed from the median and MAD of the full assembly distribution.
+    type: half_float
+    source: derived
+    status: active
+    destination: nested
+  n_minmax:
+    display_name: N min-max
+    display_group: summary
+    display_level: 1
+    description: Assembly-local N min-max transform scaled into the observed assembly range.
+    type: half_float
     source: derived
     status: active
     destination: nested

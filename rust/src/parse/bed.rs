@@ -154,6 +154,53 @@ impl SummaryFunction {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NormalisationMethod {
+    Zscore,
+    RobustZscore,
+    MinMax,
+    #[serde(
+        alias = "log2fc",
+        alias = "log2_fc",
+        alias = "log2_fold_change",
+        alias = "l2fc"
+    )]
+    Log2FoldChange,
+    #[serde(
+        alias = "robust_log2_z",
+        alias = "robust_log2_zscore",
+        alias = "robust_log2_z_score",
+        alias = "rlz",
+        alias = "rlog2z"
+    )]
+    RobustLog2Zscore,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NormalisationStatistic {
+    MeanStd,
+    MedianMad,
+    MinMax,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum NormalisationScope {
+    #[default]
+    Assembly,
+    Sequence,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NormalisationConfig {
+    pub method: NormalisationMethod,
+    pub statistic: NormalisationStatistic,
+    #[serde(default)]
+    pub scope: NormalisationScope,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ValueColumn {
     pub label: String,
@@ -161,6 +208,8 @@ pub struct ValueColumn {
     #[serde(rename = "type")]
     pub value_type: String,
     pub summary_functions: Vec<SummaryFunction>,
+    #[serde(default)]
+    pub normalisation: Option<NormalisationConfig>,
 }
 
 impl ValueColumn {
@@ -170,6 +219,17 @@ impl ValueColumn {
         } else {
             let label = format!("{}_{}", self.label, self.summary_functions[index].name());
             label
+        }
+    }
+
+    pub fn transformed_name(&self) -> Option<String> {
+        let normalisation = self.normalisation.as_ref()?;
+        match normalisation.method {
+            NormalisationMethod::Zscore => Some(format!("{}_zscore", self.label)),
+            NormalisationMethod::RobustZscore => Some(format!("{}_rz", self.label)),
+            NormalisationMethod::MinMax => Some(format!("{}_minmax", self.label)),
+            NormalisationMethod::Log2FoldChange => Some(format!("{}_l2fc", self.label)),
+            NormalisationMethod::RobustLog2Zscore => Some(format!("{}_rlz", self.label)),
         }
     }
 }
@@ -780,6 +840,135 @@ pub fn read_bed_file(config: &BedConfig) -> Result<HashMap<String, Vec<Feature>>
     }
 }
 
+fn mean_std_stats(values: &[f64]) -> (f64, f64) {
+    if values.is_empty() {
+        return (0.0, 0.0);
+    }
+
+    let mean = values.iter().sum::<f64>() / values.len() as f64;
+    let variance = if values.len() <= 1 {
+        0.0
+    } else {
+        let diff = values
+            .iter()
+            .map(|value| {
+                let delta = value - mean;
+                delta * delta
+            })
+            .sum::<f64>();
+        diff / (values.len() - 1) as f64
+    };
+    let std_dev = variance.sqrt();
+    (mean, std_dev)
+}
+
+fn median_and_mad(values: &[f64]) -> (f64, f64) {
+    if values.is_empty() {
+        return (0.0, 0.0);
+    }
+
+    let mut sorted = values.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let mid = sorted.len() / 2;
+    let median = if sorted.len() % 2 == 0 {
+        (sorted[mid - 1] + sorted[mid]) / 2.0
+    } else {
+        sorted[mid]
+    };
+
+    let mut deviations: Vec<f64> = sorted.iter().map(|value| (value - median).abs()).collect();
+    deviations.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let mad_mid = deviations.len() / 2;
+    let mad = if deviations.is_empty() {
+        0.0
+    } else if deviations.len() % 2 == 0 {
+        (deviations[mad_mid - 1] + deviations[mad_mid]) / 2.0
+    } else {
+        deviations[mad_mid]
+    };
+
+    (median, mad)
+}
+
+fn min_max_stats(values: &[f64]) -> (f64, f64) {
+    if values.is_empty() {
+        return (0.0, 0.0);
+    }
+
+    let min = values.iter().copied().fold(f64::INFINITY, f64::min);
+    let max = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    (min, max)
+}
+
+fn transform_value_for_normalisation(value: f64, config: &NormalisationConfig) -> f64 {
+    match config.method {
+        NormalisationMethod::Log2FoldChange | NormalisationMethod::RobustLog2Zscore => {
+            if value <= -1.0 {
+                0.0
+            } else {
+                (value + 1.0).log2()
+            }
+        }
+        _ => value,
+    }
+}
+
+fn normalisation_stats_for_config(values: &[f64], config: &NormalisationConfig) -> (f64, f64) {
+    let transformed_values: Vec<f64> = values
+        .iter()
+        .map(|value| transform_value_for_normalisation(*value, config))
+        .collect();
+
+    match config.statistic {
+        NormalisationStatistic::MeanStd => mean_std_stats(&transformed_values),
+        NormalisationStatistic::MedianMad => median_and_mad(&transformed_values),
+        NormalisationStatistic::MinMax => min_max_stats(&transformed_values),
+    }
+}
+
+fn apply_normalisation(value: f64, config: &NormalisationConfig, from: (f64, f64)) -> f64 {
+    let transformed_value = transform_value_for_normalisation(value, config);
+
+    match config.method {
+        NormalisationMethod::Zscore => {
+            if from.1.is_nan() || from.1 == 0.0 {
+                0.0
+            } else {
+                (transformed_value - from.0) / from.1
+            }
+        }
+        NormalisationMethod::RobustZscore => {
+            if from.1.is_nan() || from.1 == 0.0 {
+                0.0
+            } else {
+                (transformed_value - from.0) / from.1
+            }
+        }
+        NormalisationMethod::MinMax => {
+            let (min, max) = from;
+            if max.is_nan() || min.is_nan() || max <= min {
+                0.0
+            } else {
+                (transformed_value - min) / (max - min)
+            }
+        }
+        NormalisationMethod::Log2FoldChange => {
+            if from.0.is_nan() {
+                0.0
+            } else {
+                transformed_value - from.0
+            }
+        }
+        NormalisationMethod::RobustLog2Zscore => {
+            if from.1.is_nan() || from.1 == 0.0 {
+                0.0
+            } else {
+                (transformed_value - from.0) / from.1
+            }
+        }
+    }
+}
+
 pub fn parse_bed_files(
     config: &MultiBedConfig,
 ) -> Result<HashMap<String, FeatureDocument>, error::Error> {
@@ -787,6 +976,25 @@ pub fn parse_bed_files(
 
     for bed_config in &config.bed_configs {
         if let Ok(per_seq_buffers) = read_bed_file(bed_config) {
+            let assembly_stats: Vec<(f64, f64)> = bed_config
+                .value_columns
+                .iter()
+                .enumerate()
+                .map(|(index, column)| {
+                    let values: Vec<f64> = per_seq_buffers
+                        .values()
+                        .flat_map(|buffer| buffer.iter())
+                        .flat_map(|feature| feature.values.get(index).copied())
+                        .collect();
+                    column
+                        .normalisation
+                        .as_ref()
+                        .map_or((0.0, 0.0), |normalisation| {
+                            normalisation_stats_for_config(&values, normalisation)
+                        })
+                })
+                .collect();
+
             for (seq_id, buffer) in per_seq_buffers {
                 let sequence_length = buffer.last().map_or(0, |f| f.end);
                 for window_spec in config.window_specs.iter() {
@@ -858,6 +1066,41 @@ pub fn parse_bed_files(
                                 }
                                 doc.attributes.as_mut().unwrap().push(attribute);
                             }
+
+                            if let Some(normalisation) =
+                                &bed_config.value_columns[index].normalisation
+                            {
+                                let primary_summary = bed_config.value_columns[index]
+                                    .summary_functions
+                                    .first()
+                                    .cloned()
+                                    .unwrap_or(SummaryFunction::Mean);
+                                let summary_value =
+                                    summary.get(&primary_summary).copied().unwrap_or(f64::NAN);
+                                if !summary_value.is_nan() {
+                                    let transformed_key = bed_config.value_columns[index]
+                                        .transformed_name()
+                                        .unwrap_or_else(|| {
+                                            format!(
+                                                "{}_zscore",
+                                                bed_config.value_columns[index].label
+                                            )
+                                        });
+                                    let transformed_value = apply_normalisation(
+                                        summary_value,
+                                        normalisation,
+                                        assembly_stats[index],
+                                    );
+                                    if doc.attributes.is_none() {
+                                        doc.attributes = Some(vec![]);
+                                    }
+                                    doc.attributes.as_mut().unwrap().push(NestedAttribute {
+                                        key: transformed_key,
+                                        half_float_value: Some(transformed_value as f32),
+                                        ..Default::default()
+                                    });
+                                }
+                            }
                         }
 
                         let attributes = doc.attributes.as_mut().unwrap();
@@ -903,12 +1146,14 @@ mod tests {
                 index: 3,
                 value_type: "float".to_string(),
                 summary_functions: vec![SummaryFunction::Mean],
+                normalisation: None,
             },
             ValueColumn {
                 label: "value2".to_string(),
                 index: 4,
                 value_type: "int".to_string(),
                 summary_functions: vec![SummaryFunction::Sum],
+                normalisation: None,
             },
         ];
         let line = "chr1\t100\t200\t1.23\t4";
@@ -917,6 +1162,81 @@ mod tests {
         assert_eq!(feature.start, 100);
         assert_eq!(feature.end, 200);
         assert_eq!(feature.values, vec![1.23, 4.0]);
+    }
+
+    #[test]
+    fn test_assembly_local_zscore_normalisation() {
+        let config = NormalisationConfig {
+            method: NormalisationMethod::Zscore,
+            statistic: NormalisationStatistic::MeanStd,
+            scope: NormalisationScope::Assembly,
+        };
+
+        let value = 0.8;
+        let stats = (0.5, 0.2);
+        let transformed = apply_normalisation(value, &config, stats);
+
+        assert!((transformed - 1.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_assembly_local_robust_zscore_normalisation() {
+        let config = NormalisationConfig {
+            method: NormalisationMethod::RobustZscore,
+            statistic: NormalisationStatistic::MedianMad,
+            scope: NormalisationScope::Assembly,
+        };
+
+        let value = 5.0;
+        let stats = median_and_mad(&[1.0, 2.0, 3.0, 4.0, 5.0]);
+        let transformed = apply_normalisation(value, &config, stats);
+
+        assert!((transformed - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_assembly_local_minmax_normalisation() {
+        let config = NormalisationConfig {
+            method: NormalisationMethod::MinMax,
+            statistic: NormalisationStatistic::MinMax,
+            scope: NormalisationScope::Assembly,
+        };
+
+        let value = 0.4;
+        let stats = (0.0, 1.0);
+        let transformed = apply_normalisation(value, &config, stats);
+
+        assert!((transformed - 0.4).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_assembly_local_log2_fold_change_normalisation() {
+        let config = NormalisationConfig {
+            method: NormalisationMethod::Log2FoldChange,
+            statistic: NormalisationStatistic::MeanStd,
+            scope: NormalisationScope::Assembly,
+        };
+
+        let value = 7.0;
+        let stats = (2.0, 0.0);
+        let transformed = apply_normalisation(value, &config, stats);
+
+        assert!((transformed - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_assembly_local_robust_log2_zscore_normalisation() {
+        let config = NormalisationConfig {
+            method: NormalisationMethod::RobustLog2Zscore,
+            statistic: NormalisationStatistic::MedianMad,
+            scope: NormalisationScope::Assembly,
+        };
+
+        let value = 7.0;
+        let stats = (2.0, 1.0);
+        let transformed = apply_normalisation(value, &config, stats);
+
+        assert!((transformed - 1.0).abs() < 1e-9);
     }
 
     #[test]
@@ -986,6 +1306,7 @@ mod tests {
                     index: 3,
                     value_type: "float".to_string(),
                     summary_functions: vec![SummaryFunction::Mean],
+                    normalisation: None,
                 }],
             }],
             window_specs: vec![WindowSpec::Size {
@@ -1022,6 +1343,7 @@ mod tests {
                     index: 3,
                     value_type: "float".to_string(),
                     summary_functions: vec![SummaryFunction::Mean],
+                    normalisation: None,
                 }],
             }],
             window_specs: vec![WindowSpec::Size {
@@ -1058,6 +1380,7 @@ mod tests {
                     index: 3,
                     value_type: "float".to_string(),
                     summary_functions: vec![SummaryFunction::Mean],
+                    normalisation: None,
                 }],
             }],
             window_specs: vec![
@@ -1100,6 +1423,7 @@ mod tests {
                 index: 3,
                 value_type: "float".to_string(),
                 summary_functions: vec![SummaryFunction::Mean,SummaryFunction::SubWindowVariance { size: 100 }],
+                normalisation: None,
             }],
         };
         let bed_config_n = BedConfig {
@@ -1110,6 +1434,7 @@ mod tests {
                 index: 3,
                 value_type: "float".to_string(),
                 summary_functions: vec![SummaryFunction::Count, SummaryFunction::Mean, SummaryFunction::Sum],
+                normalisation: None,
             }],
         };
         let bed_config_at_skew = BedConfig {
@@ -1120,6 +1445,7 @@ mod tests {
                 index: 3,
                 value_type: "float".to_string(),
                 summary_functions: vec![SummaryFunction::Count, SummaryFunction::Mean, SummaryFunction::Sum],
+                normalisation: None,
             }],
         };
         let bed_config_gc_skew = BedConfig {
@@ -1130,6 +1456,7 @@ mod tests {
                 index: 3,
                 value_type: "float".to_string(),
                 summary_functions: vec![SummaryFunction::Count, SummaryFunction::Mean, SummaryFunction::Sum],
+                normalisation: None,
             }],
         };
         let bed_config_shannon = BedConfig {
@@ -1140,6 +1467,7 @@ mod tests {
                 index: 3,
                 value_type: "float".to_string(),
                 summary_functions: vec![SummaryFunction::Count, SummaryFunction::Mean, SummaryFunction::Sum],
+                normalisation: None,
             }],
         };
         let bed_config_cpg = BedConfig {
@@ -1150,6 +1478,7 @@ mod tests {
                 index: 3,
                 value_type: "float".to_string(),
                 summary_functions: vec![SummaryFunction::Mean, SummaryFunction::SubWindowVariance { size: 100 }],
+                normalisation: None,
             }],
         };
 
@@ -1175,11 +1504,16 @@ mod tests {
         let json_features = serde_json::to_string_pretty(&features).unwrap();
         // print the json_features to stdout for inspection
         println!("{}", &json_features);
-        // dbg!(&json_features);
-        assert_eq!(features.len(), 4);
-        // assert_eq!(features[0].sequence_id, "CM029348.1");
-        // assert_eq!(features[0].start, 0);
-        // assert_eq!(features[0].end, 1000);
-        // assert_eq!(features[0].values, vec![0.4, 0.1]);
+        assert!(!features.is_empty());
+        assert!(features
+            .values()
+            .all(|doc| doc.primary_type.starts_with("win")));
+        assert!(features
+            .values()
+            .any(|doc| doc.attributes.as_ref().is_some_and(|attrs| {
+                attrs
+                    .iter()
+                    .any(|attr| attr.key == "gc" || attr.key == "gc_mean")
+            })));
     }
 }

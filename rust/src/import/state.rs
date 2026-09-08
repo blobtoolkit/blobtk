@@ -1,3 +1,6 @@
+use crate::import::{
+    CoordinateSystem, MetricFamily, NormalizationBaselineCache, TaxonLineageEntry,
+};
 use crate::index::es::models::attribute_builder::merge_attribute_documents;
 use crate::index::es::models::documents::{AttributeDocument, FeatureDocument};
 use crate::parse::busco::{BlockSetMetrics, BuscoIdTracker};
@@ -108,6 +111,8 @@ pub struct ImportState {
     pub attribute_doc_cache: AttributeDocumentCache,
     pub assembly_id: String,
     pub taxon_id: String,
+    pub lineage: Vec<TaxonLineageEntry>,
+    pub normalization_cache: NormalizationBaselineCache,
 }
 
 impl ImportState {
@@ -121,6 +126,8 @@ impl ImportState {
             synteny_metrics_by_seq: HashMap::new(),
             synteny_metrics_by_window: HashMap::new(),
             taxon_id,
+            lineage: Vec::new(),
+            normalization_cache: NormalizationBaselineCache::new(),
         }
     }
 }

@@ -198,6 +198,15 @@ pub struct ImportOptions {
     /// Path to import configuration file
     #[arg(long = "config", short = 'c', value_name = "YAML")]
     pub config: PathBuf,
+    /// Batch/manifest ID to run when the config is a batch manifest file
+    #[arg(long = "batch", short = 'm')]
+    pub batch: Option<String>,
+    /// Remote root used for batch template expansion
+    #[arg(long = "remote-root", default_value = "https://example.org/data")]
+    pub remote_root: String,
+    /// Local root used for batch template expansion
+    #[arg(long = "local-root", default_value = ".")]
+    pub local_root: String,
 }
 
 /// Options to pass to `blobtk index`

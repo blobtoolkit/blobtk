@@ -34,6 +34,10 @@ bed:
             - name: subwindow_variance
               value:
                 size: 100
+          normalisation:
+            method: zscore
+            statistic: mean_std
+            scope: assembly
     - path: "https://gap.cog.sanger.ac.uk/{ACCESSION}/base_content/k1/{ACCESSION}.N.1k.bedGraph.gz"
       local_path: "~/tmp/{ACCESSION}.N.1k.bedGraph.gz"
       value_columns:

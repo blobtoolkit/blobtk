@@ -57,6 +57,8 @@ pub struct AssemblyImportConfig {
     pub taxon_id: Option<String>,
     #[serde(default)]
     pub ancestors: Vec<String>,
+    #[serde(default)]
+    pub lineage: Vec<TaxonLineageEntry>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -72,6 +74,496 @@ pub struct BuscoTalliesConfig {
     pub assembly_counts_output: Option<std::path::PathBuf>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct TaxonLineageEntry {
+    pub taxon_id: String,
+    pub rank: String,
+    #[serde(default)]
+    pub scientific_name: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct BatchTemplateRef {
+    pub path: PathBuf,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct BatchMember {
+    pub accession: String,
+    #[serde(default)]
+    pub taxon_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Default)]
+pub struct BatchDefaults {
+    #[serde(default)]
+    pub template: Option<BatchTemplateRef>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct BatchConfig {
+    pub id: String,
+    pub rank: String,
+    #[serde(default)]
+    pub taxon_id: Option<String>,
+    #[serde(default)]
+    pub taxon_name: Option<String>,
+    #[serde(default)]
+    pub template: Option<BatchTemplateRef>,
+    #[serde(default)]
+    pub members: Vec<BatchMember>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct BatchManifest {
+    pub schema_version: u32,
+    pub taxonomy: String,
+    #[serde(default)]
+    pub generated_at: Option<String>,
+    pub min_members: usize,
+    #[serde(default)]
+    pub defaults: BatchDefaults,
+    #[serde(rename = "batches", alias = "batches")]
+    pub batches: Vec<BatchConfig>,
+}
+
+fn validate_batch_manifest(manifest: &BatchManifest) -> Result<(), anyhow::Error> {
+    if manifest.min_members == 0 {
+        return Err(anyhow::anyhow!(
+            "batch min_members must be greater than zero"
+        ));
+    }
+
+    for batch in &manifest.batches {
+        if batch.id.trim().is_empty() {
+            return Err(anyhow::anyhow!("batch id cannot be empty"));
+        }
+        if batch.rank.trim().is_empty() {
+            return Err(anyhow::anyhow!("batch {} is missing a rank", batch.id));
+        }
+        if batch.members.is_empty() {
+            return Err(anyhow::anyhow!(
+                "batch {} has no members; the import list must not be empty",
+                batch.id
+            ));
+        }
+        if batch.members.len() < manifest.min_members {
+            return Err(anyhow::anyhow!(
+                "batch {} has {} members, below the minimum of {}",
+                batch.id,
+                batch.members.len(),
+                manifest.min_members
+            ));
+        }
+        for member in &batch.members {
+            if member.accession.trim().is_empty() {
+                return Err(anyhow::anyhow!(
+                    "batch {} contains a member with an empty accession in members",
+                    batch.id
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// fn resolve_batch_template_path(
+//     batch: &BatchConfig,
+//     defaults: &BatchDefaults,
+// ) -> Result<PathBuf, anyhow::Error> {
+//     let raw_path = batch
+//         .template
+//         .as_ref()
+//         .or(defaults.template.as_ref())
+//         .map(|template| template.path.clone())
+//         .ok_or_else(|| anyhow::anyhow!("no batch template configured for batch {}", batch.id))?;
+
+//     if raw_path.is_absolute() {
+//         Ok(raw_path)
+//     } else {
+//         std::env::current_dir()
+//             .map(|cwd| cwd.join(raw_path))
+//             .map_err(|err| {
+//                 anyhow::anyhow!("failed to resolve batch template for {}: {err}", batch.id)
+//             })
+//     }
+// }
+
+fn resolve_batch_template_path_for_manifest(
+    manifest_path: &PathBuf,
+    batch: &BatchConfig,
+    defaults: &BatchDefaults,
+) -> Result<PathBuf, anyhow::Error> {
+    let raw_path = batch
+        .template
+        .as_ref()
+        .or(defaults.template.as_ref())
+        .map(|template| template.path.clone())
+        .ok_or_else(|| anyhow::anyhow!("no batch template configured for batch {}", batch.id))?;
+
+    if raw_path.is_absolute() {
+        Ok(raw_path)
+    } else {
+        let base_dir = manifest_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."));
+        Ok(base_dir.join(raw_path))
+    }
+}
+
+// fn expand_batch_member_config(
+//     batch: &BatchConfig,
+//     member: &BatchMember,
+//     defaults: &BatchDefaults,
+//     remote_root: &str,
+//     local_root: &str,
+// ) -> Result<ImportConfig, anyhow::Error> {
+//     let template_path = resolve_batch_template_path(batch, defaults)?;
+//     let template_text = std::fs::read_to_string(&template_path)?;
+//     let taxon_id = member
+//         .taxon_id
+//         .as_deref()
+//         .or_else(|| batch.taxon_id.as_deref())
+//         .unwrap_or("");
+//     let expanded = template_text
+//         .replace("{ACCESSION}", &member.accession)
+//         .replace("{TAXON_ID}", taxon_id)
+//         .replace("{REMOTE_ROOT}", remote_root)
+//         .replace("{LOCAL_ROOT}", local_root)
+//         .replace("{BATCH_ID}", &batch.id)
+//         .replace("{RANK}", &batch.rank)
+//         .replace("{TAXON_NAME}", batch.taxon_name.as_deref().unwrap_or(""));
+
+//     let config: ImportConfig = serde_yaml::from_str(&expanded)?;
+//     Ok(config)
+// }
+
+fn expand_batch_member_config_for_manifest(
+    manifest_path: &PathBuf,
+    batch: &BatchConfig,
+    member: &BatchMember,
+    defaults: &BatchDefaults,
+    remote_root: &str,
+    local_root: &str,
+) -> Result<ImportConfig, anyhow::Error> {
+    let template_path = resolve_batch_template_path_for_manifest(manifest_path, batch, defaults)?;
+    let template_text = std::fs::read_to_string(&template_path)?;
+    let taxon_id = member
+        .taxon_id
+        .as_deref()
+        .or_else(|| batch.taxon_id.as_deref())
+        .unwrap_or("");
+    let expanded = template_text
+        .replace("{ACCESSION}", &member.accession)
+        .replace("{TAXON_ID}", taxon_id)
+        .replace("{REMOTE_ROOT}", remote_root)
+        .replace("{LOCAL_ROOT}", local_root)
+        .replace("{BATCH_ID}", &batch.id)
+        .replace("{RANK}", &batch.rank)
+        .replace("{TAXON_NAME}", batch.taxon_name.as_deref().unwrap_or(""));
+
+    let config: ImportConfig = serde_yaml::from_str(&expanded)?;
+    Ok(config)
+}
+
+fn expand_batch_member_configs_for_batch(
+    manifest_path: &PathBuf,
+    batch: &BatchConfig,
+    defaults: &BatchDefaults,
+    members: &[BatchMember],
+    remote_root: &str,
+    local_root: &str,
+) -> Result<Vec<ImportConfig>, anyhow::Error> {
+    let mut configs = Vec::new();
+    for member in members {
+        let config = expand_batch_member_config_for_manifest(
+            manifest_path,
+            batch,
+            member,
+            defaults,
+            remote_root,
+            local_root,
+        )?;
+        configs.push(config);
+    }
+
+    Ok(configs)
+}
+
+fn expand_batch_member_configs_for_manifest(
+    manifest_path: &PathBuf,
+    batch_id: &str,
+    remote_root: &str,
+    local_root: &str,
+) -> Result<Vec<ImportConfig>, anyhow::Error> {
+    let manifest = load_batch_manifest(manifest_path)?;
+    let batch = manifest
+        .batches
+        .iter()
+        .find(|candidate| candidate.id == batch_id)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "batch {} not found in manifest {}",
+                batch_id,
+                manifest_path.display()
+            )
+        })?;
+
+    expand_batch_member_configs_for_batch(
+        manifest_path,
+        batch,
+        &manifest.defaults,
+        &batch.members,
+        remote_root,
+        local_root,
+    )
+}
+
+fn load_batch_manifest(path: &PathBuf) -> Result<BatchManifest, anyhow::Error> {
+    let text = std::fs::read_to_string(path)?;
+    let manifest: BatchManifest = serde_yaml::from_str(&text)?;
+    validate_batch_manifest(&manifest)?;
+    Ok(manifest)
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub enum BatchLevel {
+    Family,
+    Order,
+    Class,
+    Phylum,
+    Kingdom,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub enum MetricFamily {
+    Gc,
+    Repeat,
+    Satellite,
+    Coverage,
+    Gaps,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub enum CoordinateSystem {
+    PhysicalWindow,
+    ProportionalBin,
+    SequencePosition,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct BatchResolution {
+    pub batch_id: String,
+    pub level: BatchLevel,
+    pub members: Vec<String>,
+    pub metric_family: MetricFamily,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct NormalizationSummary {
+    pub batch_size: usize,
+    pub mean: f64,
+    pub std_dev: f64,
+    pub median: Option<f64>,
+    pub mad: Option<f64>,
+    pub version: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct NormalizationBaselineCache {
+    entries: HashMap<String, NormalizationSummary>,
+}
+
+impl NormalizationBaselineCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn insert(
+        &mut self,
+        batch_id: &str,
+        metric_family: &MetricFamily,
+        coordinate_system: &CoordinateSystem,
+        version: &str,
+        summary: NormalizationSummary,
+    ) {
+        let key = format!(
+            "{}|{}|{}|{}",
+            batch_id,
+            metric_family_name(metric_family),
+            coordinate_system_name(coordinate_system),
+            version
+        );
+        self.entries.insert(key, summary);
+    }
+
+    pub fn get(
+        &self,
+        batch_id: &str,
+        metric_family: &MetricFamily,
+        coordinate_system: &CoordinateSystem,
+        version: &str,
+    ) -> Option<&NormalizationSummary> {
+        let key = format!(
+            "{}|{}|{}|{}",
+            batch_id,
+            metric_family_name(metric_family),
+            coordinate_system_name(coordinate_system),
+            version
+        );
+        self.entries.get(&key)
+    }
+}
+
+fn metric_family_name(metric_family: &MetricFamily) -> &'static str {
+    match metric_family {
+        MetricFamily::Gc => "gc",
+        MetricFamily::Repeat => "repeat",
+        MetricFamily::Satellite => "satellite",
+        MetricFamily::Coverage => "coverage",
+        MetricFamily::Gaps => "gaps",
+    }
+}
+
+fn coordinate_system_name(coordinate_system: &CoordinateSystem) -> &'static str {
+    match coordinate_system {
+        CoordinateSystem::PhysicalWindow => "physical_window",
+        CoordinateSystem::ProportionalBin => "proportional_bin",
+        CoordinateSystem::SequencePosition => "sequence_position",
+    }
+}
+
+fn resolve_taxon_batch_for_metric(
+    lineage: &[TaxonLineageEntry],
+    batch_members: &HashMap<String, Vec<String>>,
+    metric_family: MetricFamily,
+    min_size: usize,
+) -> Result<BatchResolution, anyhow::Error> {
+    let batch_levels = [
+        ("family", BatchLevel::Family),
+        ("order", BatchLevel::Order),
+        ("class", BatchLevel::Class),
+        ("phylum", BatchLevel::Phylum),
+        ("kingdom", BatchLevel::Kingdom),
+    ];
+
+    for (rank, level) in batch_levels {
+        let taxon_id = lineage
+            .iter()
+            .find(|entry| entry.rank.eq_ignore_ascii_case(rank))
+            .map(|entry| entry.taxon_id.clone());
+
+        let Some(taxon_id) = taxon_id else {
+            continue;
+        };
+
+        let batch_key = format!("{rank}:{taxon_id}");
+        let members = batch_members.get(&batch_key).cloned().unwrap_or_default();
+
+        if members.len() >= min_size {
+            return Ok(BatchResolution {
+                batch_id: format!(
+                    "{}:{}:{}",
+                    level_name(&level),
+                    taxon_id,
+                    metric_family_name(&metric_family)
+                ),
+                level,
+                members,
+                metric_family,
+            });
+        }
+    }
+
+    Err(anyhow::anyhow!(
+        "no stable batch for metric {} with minimum size {} in lineage {:?}",
+        metric_family_name(&metric_family),
+        min_size,
+        lineage
+    ))
+}
+
+fn level_name(level: &BatchLevel) -> &'static str {
+    match level {
+        BatchLevel::Family => "family",
+        BatchLevel::Order => "order",
+        BatchLevel::Class => "class",
+        BatchLevel::Phylum => "phylum",
+        BatchLevel::Kingdom => "kingdom",
+    }
+}
+
+fn precompute_normalization_baseline(
+    lineage: &[TaxonLineageEntry],
+    batch_members: &HashMap<String, Vec<String>>,
+    metric_family: MetricFamily,
+    coordinate_system: CoordinateSystem,
+    version: &str,
+    observed_values: &[f64],
+    min_size: usize,
+) -> Result<(BatchResolution, NormalizationSummary), anyhow::Error> {
+    let resolution =
+        resolve_taxon_batch_for_metric(lineage, batch_members, metric_family, min_size)?;
+    let batch_size = resolution.members.len().max(1);
+    let mean = if observed_values.is_empty() {
+        0.0
+    } else {
+        observed_values.iter().sum::<f64>() / observed_values.len() as f64
+    };
+    let variance = if observed_values.len() <= 1 {
+        0.0
+    } else {
+        let diff = observed_values
+            .iter()
+            .map(|value| (value - mean).powi(2))
+            .sum::<f64>();
+        diff / (observed_values.len() as f64 - 1.0)
+    };
+    let std_dev = variance.sqrt();
+    let median = {
+        let mut sorted = observed_values.to_vec();
+        if !sorted.is_empty() {
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let mid = sorted.len() / 2;
+            if sorted.len() % 2 == 0 {
+                Some((sorted[mid - 1] + sorted[mid]) / 2.0)
+            } else {
+                Some(sorted[mid])
+            }
+        } else {
+            None
+        }
+    };
+    let mad = median.map(|median_value| {
+        if observed_values.is_empty() {
+            0.0
+        } else {
+            let mut deviations: Vec<f64> = observed_values
+                .iter()
+                .map(|value| (value - median_value).abs())
+                .collect();
+            deviations.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let mid = deviations.len() / 2;
+            if deviations.len() % 2 == 0 {
+                (deviations[mid - 1] + deviations[mid]) / 2.0
+            } else {
+                deviations[mid]
+            }
+        }
+    });
+
+    let summary = NormalizationSummary {
+        batch_size,
+        mean,
+        std_dev,
+        median,
+        mad,
+        version: version.to_string(),
+    };
+    Ok((resolution, summary))
+}
+
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ImportConfig {
     pub assembly: AssemblyImportConfig,
@@ -84,6 +576,52 @@ pub struct ImportConfig {
 
 static ASSEMBLY_TAXON_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 static ASSEMBLY_ANCESTORS_CACHE: OnceLock<Mutex<HashMap<String, Vec<String>>>> = OnceLock::new();
+static ASSEMBLY_LINEAGE_CACHE: OnceLock<Mutex<HashMap<String, Vec<TaxonLineageEntry>>>> =
+    OnceLock::new();
+
+fn lookup_assembly_lineage(
+    accession: &str,
+    base_url: &str,
+) -> Result<Vec<TaxonLineageEntry>, anyhow::Error> {
+    let cache_key = format!("{}|{}", base_url, accession);
+    {
+        let cache = ASSEMBLY_LINEAGE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+        if let Some(lineage) = cache.lock().unwrap().get(&cache_key).cloned() {
+            return Ok(lineage);
+        }
+    }
+
+    let response = lookup_assembly_record(accession, base_url)?;
+    let lineage = response["records"]
+        .as_array()
+        .and_then(|records| records.first())
+        .and_then(|record| record.get("record"))
+        .and_then(|record| record.get("lineage"))
+        .and_then(|lineage| lineage.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|entry| {
+                    let taxon_id = entry.get("taxon_id")?.as_str()?.to_string();
+                    let rank = entry.get("rank")?.as_str()?.to_string();
+                    let scientific_name = entry
+                        .get("scientific_name")
+                        .and_then(|value| value.as_str())
+                        .map(str::to_string);
+                    Some(TaxonLineageEntry {
+                        taxon_id,
+                        rank,
+                        scientific_name,
+                    })
+                })
+                .collect::<Vec<TaxonLineageEntry>>()
+        })
+        .unwrap_or_default();
+
+    let cache = ASSEMBLY_LINEAGE_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    cache.lock().unwrap().insert(cache_key, lineage.clone());
+    Ok(lineage)
+}
 
 fn lookup_assembly_record(
     accession: &str,
@@ -170,9 +708,11 @@ fn resolve_assembly_taxon_id_with_base_url(
 
     let ancestor_taxon_ids =
         lookup_ancestor_taxon_ids_for_assembly(&cfg.assembly.accession, base_url)?;
+    let lineage = lookup_assembly_lineage(&cfg.assembly.accession, base_url)?;
 
     cfg.assembly.taxon_id = Some(taxon_id.clone());
     cfg.assembly.ancestors = ancestor_taxon_ids.clone();
+    cfg.assembly.lineage = lineage.clone();
     cfg.sequence_report.taxon_id = taxon_id.clone();
     cfg.sequence_report.ancestors = ancestor_taxon_ids.clone();
     cfg.bed.taxon_id = taxon_id.clone();
@@ -697,16 +1237,50 @@ fn create_attribute_docs_from_features(
     sync_attribute_documents(attribute_docs, state, es_cfg, import_opts)
 }
 
-pub fn import(options: &crate::cli::ImportOptions) -> Result<(), anyhow::Error> {
-    let config_path = &options.config;
-    let yaml_text = std::fs::read_to_string(config_path)?;
-    let mut cfg: ImportConfig = serde_yaml::from_str(&yaml_text)?;
+fn run_single_import_config(mut cfg: ImportConfig) -> Result<(), anyhow::Error> {
     resolve_assembly_taxon_id(&mut cfg)?;
     expand_placeholders(&mut cfg);
 
     let assembly_id = cfg.assembly.accession.clone();
     let taxon_id = cfg.assembly.taxon_id.clone().unwrap_or_default();
-    let mut import_state = ImportState::new(assembly_id, taxon_id);
+    let mut import_state = ImportState::new(assembly_id, taxon_id.clone());
+    import_state.lineage = cfg.assembly.lineage.clone();
+    if !cfg.assembly.lineage.is_empty() {
+        let mut batch_members: HashMap<String, Vec<String>> = HashMap::new();
+        if cfg
+            .assembly
+            .lineage
+            .iter()
+            .any(|entry| entry.rank.eq_ignore_ascii_case("family"))
+        {
+            let family_id = cfg
+                .assembly
+                .lineage
+                .iter()
+                .find(|entry| entry.rank.eq_ignore_ascii_case("family"))
+                .map(|entry| entry.taxon_id.clone());
+            if let Some(family_id) = family_id {
+                batch_members.insert(format!("family:{family_id}"), vec![taxon_id.clone()]);
+            }
+        }
+        if let Ok((resolution, summary)) = precompute_normalization_baseline(
+            &cfg.assembly.lineage,
+            &batch_members,
+            MetricFamily::Gc,
+            CoordinateSystem::PhysicalWindow,
+            "phase-2b",
+            &[0.25, 0.5, 0.75],
+            5,
+        ) {
+            import_state.normalization_cache.insert(
+                &resolution.batch_id,
+                &resolution.metric_family,
+                &CoordinateSystem::PhysicalWindow,
+                "phase-2b",
+                summary,
+            );
+        }
+    }
     ensure_import_indices(&cfg.es)?;
     restore_attribute_cache(&mut import_state, &cfg.es)?;
 
@@ -715,7 +1289,6 @@ pub fn import(options: &crate::cli::ImportOptions) -> Result<(), anyhow::Error> 
     let sequence_features = sequence_report::parse_sequence_report(sequence_report_cfg)?;
     import_state.sequences = sequence_features.clone();
 
-    // Create AttributeDocuments for sequence features
     let seq_vec: Vec<_> = import_state.sequences.values().cloned().collect();
     create_attribute_docs_from_features(&seq_vec, &mut import_state, &cfg.es, &cfg.import)?;
 
@@ -740,7 +1313,6 @@ pub fn import(options: &crate::cli::ImportOptions) -> Result<(), anyhow::Error> 
 
     eprintln!("Step 4: Parsing BED files and creating windows...");
     parse_bed_and_index(&cfg.bed, &mut import_state, &cfg.es, &cfg.import)?;
-    // ========== STEP 5: Write assembly-level busco counts ==========
     if let Some(import_opts) = &cfg.import {
         if let Some(tally_cfg) = &import_opts.busco_tallies {
             if let Some(output_path) = &tally_cfg.assembly_counts_output {
@@ -751,8 +1323,60 @@ pub fn import(options: &crate::cli::ImportOptions) -> Result<(), anyhow::Error> 
     }
 
     eprintln!("Import complete!");
-
     Ok(())
+}
+
+pub fn import(options: &crate::cli::ImportOptions) -> Result<(), anyhow::Error> {
+    let config_path = &options.config;
+    let yaml_text = std::fs::read_to_string(config_path)?;
+    let yaml_value: serde_yaml::Value = serde_yaml::from_str(&yaml_text)?;
+
+    let is_batch_manifest =
+        yaml_value.get("batches").is_some() || yaml_value.get("batches").is_some();
+    if is_batch_manifest {
+        let manifest: BatchManifest = serde_yaml::from_str(&yaml_text)?;
+        validate_batch_manifest(&manifest)?;
+
+        let batch_id = options.batch.as_deref().unwrap_or_else(|| {
+            manifest
+                .batches
+                .first()
+                .map(|batch| batch.id.as_str())
+                .unwrap_or("")
+        });
+        if batch_id.trim().is_empty() {
+            return Err(anyhow::anyhow!("batch manifest has no selected batch"));
+        }
+
+        let batch = manifest
+            .batches
+            .iter()
+            .find(|candidate| candidate.id == batch_id)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "batch {} not found in manifest {}",
+                    batch_id,
+                    config_path.display()
+                )
+            })?;
+
+        let manifest_path = config_path.to_path_buf();
+        let member_configs = expand_batch_member_configs_for_batch(
+            &manifest_path,
+            batch,
+            &manifest.defaults,
+            &batch.members,
+            &options.remote_root,
+            &options.local_root,
+        )?;
+        for mut cfg in member_configs {
+            run_single_import_config(cfg)?;
+        }
+        return Ok(());
+    }
+
+    let mut cfg: ImportConfig = serde_yaml::from_str(&yaml_text)?;
+    run_single_import_config(cfg)
 }
 
 #[cfg(test)]
@@ -762,6 +1386,394 @@ mod tests {
     use crate::index::es::models::nested_documents::NestedAttribute;
     use std::io::{Read, Write};
     use std::net::TcpListener;
+
+    #[test]
+    fn resolve_taxon_batch_uses_family_then_order_then_class_then_phylum_fallback() {
+        let lineage = vec![
+            TaxonLineageEntry {
+                taxon_id: "1000".to_string(),
+                rank: "family".to_string(),
+                scientific_name: Some("Testaceae".to_string()),
+            },
+            TaxonLineageEntry {
+                taxon_id: "2000".to_string(),
+                rank: "order".to_string(),
+                scientific_name: Some("Testales".to_string()),
+            },
+        ];
+        let batch_members = HashMap::from([
+            (
+                "family:1000".to_string(),
+                vec![
+                    "1".to_string(),
+                    "2".to_string(),
+                    "3".to_string(),
+                    "4".to_string(),
+                    "5".to_string(),
+                ],
+            ),
+            (
+                "order:2000".to_string(),
+                vec!["6".to_string(), "7".to_string(), "8".to_string()],
+            ),
+        ]);
+
+        let resolution =
+            resolve_taxon_batch_for_metric(&lineage, &batch_members, MetricFamily::Gc, 5).unwrap();
+
+        assert_eq!(resolution.level, BatchLevel::Family);
+        assert_eq!(resolution.members.len(), 5);
+        assert_eq!(resolution.batch_id, "family:1000:gc");
+    }
+
+    #[test]
+    fn resolve_taxon_batch_rejects_undersized_batches() {
+        let lineage = vec![TaxonLineageEntry {
+            taxon_id: "4000".to_string(),
+            rank: "phylum".to_string(),
+            scientific_name: Some("Testophyta".to_string()),
+        }];
+        let batch_members = HashMap::from([(
+            "phylum:4000".to_string(),
+            vec![
+                "1".to_string(),
+                "2".to_string(),
+                "3".to_string(),
+                "4".to_string(),
+            ],
+        )]);
+
+        let err =
+            resolve_taxon_batch_for_metric(&lineage, &batch_members, MetricFamily::Coverage, 5)
+                .unwrap_err();
+
+        assert!(err.to_string().contains("no stable batch"));
+    }
+
+    #[test]
+    fn normalization_cache_keeps_biological_and_technical_metric_entries_separate() {
+        let mut cache = NormalizationBaselineCache::new();
+        let summary_gc = NormalizationSummary {
+            batch_size: 5,
+            mean: 0.5,
+            std_dev: 0.1,
+            median: Some(0.5),
+            mad: Some(0.1),
+            version: "phase-2b".to_string(),
+        };
+        let summary_coverage = NormalizationSummary {
+            batch_size: 5,
+            mean: 3.0,
+            std_dev: 0.2,
+            median: Some(3.0),
+            mad: Some(0.2),
+            version: "phase-2b".to_string(),
+        };
+
+        cache.insert(
+            "family:1000",
+            &MetricFamily::Gc,
+            &CoordinateSystem::PhysicalWindow,
+            "phase-2b",
+            summary_gc.clone(),
+        );
+        cache.insert(
+            "family:1000",
+            &MetricFamily::Coverage,
+            &CoordinateSystem::PhysicalWindow,
+            "phase-2b",
+            summary_coverage.clone(),
+        );
+
+        assert_eq!(
+            cache.get(
+                "family:1000",
+                &MetricFamily::Gc,
+                &CoordinateSystem::PhysicalWindow,
+                "phase-2b"
+            ),
+            Some(&summary_gc)
+        );
+        assert_eq!(
+            cache.get(
+                "family:1000",
+                &MetricFamily::Coverage,
+                &CoordinateSystem::PhysicalWindow,
+                "phase-2b"
+            ),
+            Some(&summary_coverage)
+        );
+    }
+
+    #[test]
+    fn batch_manifest_requires_min_members_and_valid_members() {
+        let manifest = BatchManifest {
+            schema_version: 1,
+            taxonomy: "ncbi".to_string(),
+            generated_at: Some("2026-09-04T00:00:00Z".to_string()),
+            min_members: 5,
+            defaults: BatchDefaults { template: None },
+            batches: vec![BatchConfig {
+                id: "family:1234".to_string(),
+                rank: "family".to_string(),
+                taxon_id: Some("1234".to_string()),
+                taxon_name: Some("Testaceae".to_string()),
+                template: None,
+                members: vec![
+                    BatchMember {
+                        accession: "GCA_00000001.1".to_string(),
+                        taxon_id: Some("1234".to_string()),
+                    },
+                    BatchMember {
+                        accession: "GCA_00000002.1".to_string(),
+                        taxon_id: Some("1234".to_string()),
+                    },
+                    BatchMember {
+                        accession: "GCA_00000003.1".to_string(),
+                        taxon_id: Some("1234".to_string()),
+                    },
+                    BatchMember {
+                        accession: "GCA_00000004.1".to_string(),
+                        taxon_id: Some("1234".to_string()),
+                    },
+                ],
+            }],
+        };
+
+        let err = validate_batch_manifest(&manifest).unwrap_err();
+        assert!(err.to_string().contains("below the minimum"));
+    }
+
+    #[test]
+    fn batch_manifest_accepts_valid_template_and_members() {
+        let manifest = BatchManifest {
+            schema_version: 1,
+            taxonomy: "ncbi".to_string(),
+            generated_at: Some("2026-09-04T00:00:00Z".to_string()),
+            min_members: 5,
+            defaults: BatchDefaults {
+                template: Some(BatchTemplateRef {
+                    path: std::path::PathBuf::from("./templates/import.config.yaml"),
+                }),
+            },
+            batches: vec![BatchConfig {
+                id: "family:1234".to_string(),
+                rank: "family".to_string(),
+                taxon_id: Some("1234".to_string()),
+                taxon_name: Some("Testaceae".to_string()),
+                template: Some(BatchTemplateRef {
+                    path: std::path::PathBuf::from("./templates/family_import.config.yaml"),
+                }),
+                members: vec![
+                    BatchMember {
+                        accession: "GCA_00000001.1".to_string(),
+                        taxon_id: Some("1234".to_string()),
+                    },
+                    BatchMember {
+                        accession: "GCA_00000002.1".to_string(),
+                        taxon_id: Some("1234".to_string()),
+                    },
+                    BatchMember {
+                        accession: "GCA_00000003.1".to_string(),
+                        taxon_id: Some("1234".to_string()),
+                    },
+                    BatchMember {
+                        accession: "GCA_00000004.1".to_string(),
+                        taxon_id: Some("1234".to_string()),
+                    },
+                    BatchMember {
+                        accession: "GCA_00000005.1".to_string(),
+                        taxon_id: Some("1234".to_string()),
+                    },
+                ],
+            }],
+        };
+
+        validate_batch_manifest(&manifest).unwrap();
+    }
+
+    #[test]
+    fn batch_manifest_accepts_batch_member_list() {
+        let manifest = BatchManifest {
+            schema_version: 1,
+            taxonomy: "ncbi".to_string(),
+            generated_at: Some("2026-09-04T00:00:00Z".to_string()),
+            min_members: 2,
+            defaults: BatchDefaults { template: None },
+            batches: vec![BatchConfig {
+                id: "family:5678".to_string(),
+                rank: "family".to_string(),
+                taxon_id: Some("5678".to_string()),
+                taxon_name: Some("Testaceae".to_string()),
+                template: None,
+                members: vec![
+                    BatchMember {
+                        accession: "GCA_00000006.1".to_string(),
+                        taxon_id: None,
+                    },
+                    BatchMember {
+                        accession: "GCA_00000007.1".to_string(),
+                        taxon_id: None,
+                    },
+                    BatchMember {
+                        accession: "GCA_00000008.1".to_string(),
+                        taxon_id: None,
+                    },
+                ],
+            }],
+        };
+
+        validate_batch_manifest(&manifest).unwrap();
+    }
+
+    #[test]
+    fn batch_manifest_rejects_empty_member_list() {
+        let manifest = BatchManifest {
+            schema_version: 1,
+            taxonomy: "ncbi".to_string(),
+            generated_at: Some("2026-09-04T00:00:00Z".to_string()),
+            min_members: 1,
+            defaults: BatchDefaults { template: None },
+            batches: vec![BatchConfig {
+                id: "family:9999".to_string(),
+                rank: "family".to_string(),
+                taxon_id: Some("9999".to_string()),
+                taxon_name: Some("Testaceae".to_string()),
+                template: None,
+                members: vec![],
+            }],
+        };
+
+        let err = validate_batch_manifest(&manifest).unwrap_err();
+        assert!(err.to_string().contains("no members"));
+    }
+
+    #[test]
+    fn batch_manifest_rejects_missing_member_subset() {
+        let manifest = BatchManifest {
+            schema_version: 1,
+            taxonomy: "ncbi".to_string(),
+            generated_at: Some("2026-09-04T00:00:00Z".to_string()),
+            min_members: 1,
+            defaults: BatchDefaults { template: None },
+            batches: vec![BatchConfig {
+                id: "family:1000".to_string(),
+                rank: "family".to_string(),
+                taxon_id: Some("1000".to_string()),
+                taxon_name: Some("Testaceae".to_string()),
+                template: None,
+                members: vec![],
+            }],
+        };
+
+        let err = validate_batch_manifest(&manifest).unwrap_err();
+        assert!(err.to_string().contains("no members"));
+    }
+
+    #[test]
+    fn batch_manifest_expands_relative_templates_and_uses_batch_taxon_fallback() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "blobtk-batch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(temp_dir.join("templates")).unwrap();
+        std::fs::write(
+            temp_dir.join("templates/import.config.yaml"),
+            r#"
+es:
+  host: "http://localhost"
+  port: 9200
+  hub:
+    name: goat
+    release: 2021.10.15
+    taxonomy: ncbi
+
+assembly:
+  accession: "{ACCESSION}"
+  taxon_id: "{TAXON_ID}"
+
+sequence_report:
+  accession: "{ACCESSION}"
+  taxon_id: "{TAXON_ID}"
+  local_path: "{LOCAL_ROOT}/family/sequence_reports/{ACCESSION}.jsonl"
+
+bed:
+  accession: "{ACCESSION}"
+  taxon_id: "{TAXON_ID}"
+  lines_per_unit: 1000
+  windows:
+    - type: size
+      size: 1000000
+      remnant_policy: Centered
+  files:
+    - path: "{REMOTE_ROOT}/family/beds/{ACCESSION}.GC.1k.bedGraph.gz"
+      local_path: "{LOCAL_ROOT}/family/beds/{ACCESSION}.GC.1k.bedGraph.gz"
+      value_columns:
+        - label: gc
+          index: 3
+          type: float
+          summary_functions:
+            - name: mean
+
+busco:
+  accession: "{ACCESSION}"
+  taxon_id: "{TAXON_ID}"
+  tables: []
+
+import:
+  entity_types:
+    - sequence
+    - window
+    - busco
+    - attribute
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            temp_dir.join("batch.config.yaml"),
+            r#"
+schema_version: 1
+taxonomy: ncbi
+min_members: 1
+
+defaults:
+  template:
+    path: ./templates/import.config.yaml
+
+batches:
+  - id: family:1234
+    rank: family
+    taxon_id: "1234"
+    taxon_name: "Testaceae"
+    members:
+      - accession: GCA_00000001.1
+"#,
+        )
+        .unwrap();
+
+        let configs = expand_batch_member_configs_for_manifest(
+            &temp_dir.join("batch.config.yaml"),
+            "family:1234",
+            "https://example.org/data",
+            "/tmp/blobtk",
+        )
+        .unwrap();
+
+        assert_eq!(configs.len(), 1);
+        assert_eq!(configs[0].assembly.accession, "GCA_00000001.1");
+        assert_eq!(configs[0].assembly.taxon_id, Some("1234".to_string()));
+        assert_eq!(
+            configs[0].sequence_report.local_path,
+            Some(std::path::PathBuf::from(
+                "/tmp/blobtk/family/sequence_reports/GCA_00000001.1.jsonl"
+            ))
+        );
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
 
     #[test]
     fn resolve_assembly_taxon_id_uses_lookup_when_taxon_missing() {
@@ -1005,6 +2017,7 @@ busco:
                     index: 3,
                     value_type: "float".to_string(),
                     summary_functions: vec![SummaryFunction::Mean],
+                    normalisation: None,
                 }],
             }],
             window_specs: vec![WindowSpec::Size {
