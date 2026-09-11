@@ -453,14 +453,51 @@ impl ElasticsearchClient {
             .body(bulk_request_body)
             .send()
             .map_err(|e| EsError::ApiError(e.to_string()))?;
-        if response.status().is_success() {
-            Ok(())
-        } else {
-            Err(EsError::ApiError(format!(
+
+        if !response.status().is_success() {
+            return Err(EsError::ApiError(format!(
                 "Failed to perform bulk indexing: {}",
                 response.text().unwrap_or_default()
-            )))
+            )));
         }
+
+        let body: serde_json::Value = response
+            .json()
+            .map_err(|e| EsError::SerializationError(e.to_string()))?;
+
+        if body.get("errors").and_then(serde_json::Value::as_bool) == Some(true) {
+            let mut failures = Vec::new();
+            if let Some(items) = body.get("items").and_then(serde_json::Value::as_array) {
+                for item in items {
+                    if let Some(index) = item.get("index") {
+                        if index.get("error").is_some() {
+                            let id = index
+                                .get("_id")
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or("unknown");
+                            let reason = index
+                                .get("error")
+                                .and_then(|err| err.get("reason"))
+                                .and_then(serde_json::Value::as_str)
+                                .unwrap_or("unknown error");
+                            failures.push(format!("{}: {}", id, reason));
+                        }
+                    }
+                }
+            }
+            if failures.is_empty() {
+                return Err(EsError::ApiError(
+                    "Bulk indexing reported errors without item detail.".to_string(),
+                ));
+            }
+            return Err(EsError::ApiError(format!(
+                "Bulk indexing reported errors for {} document(s): {}",
+                failures.len(),
+                failures.join("; ")
+            )));
+        }
+
+        Ok(())
     }
 
     pub fn refresh(&self, index_prefix: &str) -> Result<(), EsError> {

@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::attribute_registry::AttributeRegistry;
+use crate::config::legacy::normalize_legacy_import_config;
 use crate::error;
 use crate::index::es::client::ElasticsearchClient;
 use crate::index::es::models::attribute_builder::build_attribute_document;
@@ -18,20 +19,20 @@ use crate::parse::busco::{
     MultiBuscoConfig,
 };
 use crate::parse::sequence_report;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 
 pub mod state;
 use state::ImportState;
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, Default)]
 pub struct HubConfig {
     pub name: String,
     pub release: String,
     pub taxonomy: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, Default)]
 pub struct EsConfig {
     pub host: String,
     pub port: u16,
@@ -40,17 +41,20 @@ pub struct EsConfig {
     pub hub: HubConfig,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, Default)]
 pub struct SequenceReportImportConfig {
     pub accession: String,
     #[serde(default)]
     pub taxon_id: String,
     #[serde(default)]
     pub ancestors: Vec<String>,
+    #[serde(default)]
+    pub path: Option<std::path::PathBuf>,
+    #[serde(default)]
     pub local_path: Option<std::path::PathBuf>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, Default)]
 pub struct AssemblyImportConfig {
     pub accession: String,
     #[serde(default)]
@@ -564,7 +568,7 @@ fn precompute_normalization_baseline(
     Ok((resolution, summary))
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, Default)]
 pub struct ImportConfig {
     pub assembly: AssemblyImportConfig,
     pub es: EsConfig,
@@ -731,6 +735,37 @@ fn expand_busco_tables(cfg: &mut ImportConfig) {
     let taxon = cfg.assembly.taxon_id.clone().unwrap_or_default();
     let mut expanded: Vec<BuscoFileConfig> = Vec::new();
 
+    if let Some(existing) = &cfg.busco.files {
+        for file in existing.iter() {
+            let p = file
+                .path
+                .to_string_lossy()
+                .to_string()
+                .replace("{ACCESSION}", &accession)
+                .replace("{TAXON}", &taxon)
+                .replace("{TAXON_ID}", &taxon)
+                .replace("{LINEAGE}", &file.lineage);
+            let local_p = file.local_path.as_ref().map(|s| {
+                s.to_string_lossy()
+                    .to_string()
+                    .replace("{ACCESSION}", &accession)
+                    .replace("{TAXON}", &taxon)
+                    .replace("{TAXON_ID}", &taxon)
+                    .replace("{LINEAGE}", &file.lineage)
+            });
+            expanded.push(BuscoFileConfig {
+                path: PathBuf::from(p),
+                local_path: local_p.as_ref().map(|s| PathBuf::from(s)),
+                lineage: file.lineage.clone(),
+                taxon_id: file.taxon_id.clone(),
+                accession: file.accession.clone(),
+                ancestors: file.ancestors.clone(),
+            });
+        }
+        cfg.busco.files = Some(expanded);
+        return;
+    }
+
     if let Some(tables) = &cfg.busco.tables {
         for table in tables.iter() {
             let path_str = table.path.to_string_lossy().to_string();
@@ -744,11 +779,13 @@ fn expand_busco_tables(cfg: &mut ImportConfig) {
                     let p = path_str
                         .replace("{ACCESSION}", &accession)
                         .replace("{LINEAGE}", lineage)
-                        .replace("{TAXON}", &taxon);
+                        .replace("{TAXON}", &taxon)
+                        .replace("{TAXON_ID}", &taxon);
                     let local_p = local_path_str.as_ref().map(|s| {
                         s.replace("{ACCESSION}", &accession)
                             .replace("{LINEAGE}", lineage)
                             .replace("{TAXON}", &taxon)
+                            .replace("{TAXON_ID}", &taxon)
                     });
                     expanded.push(BuscoFileConfig {
                         path: PathBuf::from(p),
@@ -762,10 +799,12 @@ fn expand_busco_tables(cfg: &mut ImportConfig) {
             } else {
                 let p = path_str
                     .replace("{ACCESSION}", &accession)
-                    .replace("{TAXON}", &taxon);
+                    .replace("{TAXON}", &taxon)
+                    .replace("{TAXON_ID}", &taxon);
                 let local_p = local_path_str.as_ref().map(|s| {
                     s.replace("{ACCESSION}", &accession)
                         .replace("{TAXON}", &taxon)
+                        .replace("{TAXON_ID}", &taxon)
                 });
                 expanded.push(BuscoFileConfig {
                     path: PathBuf::from(p),
@@ -783,24 +822,84 @@ fn expand_busco_tables(cfg: &mut ImportConfig) {
 
 fn expand_placeholders(cfg: &mut ImportConfig) {
     let accession = cfg.assembly.accession.clone();
-    for bed in cfg.bed.bed_configs.iter_mut() {
-        let s = bed.path.to_string_lossy().to_string();
-        let s = s.replace("{ACCESSION}", &accession);
-        bed.path = std::path::PathBuf::from(s);
-        if let Some(local_path) = &bed.local_path {
-            let s = local_path.to_string_lossy().to_string();
-            let s = s.replace("{ACCESSION}", &accession);
-            bed.local_path = Some(std::path::PathBuf::from(s));
-        }
+    let taxon = cfg.assembly.taxon_id.clone().unwrap_or_default();
+
+    let s = cfg
+        .sequence_report
+        .path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string());
+    if let Some(s) = s {
+        let s = s
+            .replace("{ACCESSION}", &accession)
+            .replace("{TAXON}", &taxon)
+            .replace("{TAXON_ID}", &taxon);
+        cfg.sequence_report.path = Some(std::path::PathBuf::from(s));
     }
-    expand_busco_tables(cfg);
+
     let s = cfg
         .sequence_report
         .local_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
     if let Some(s) = s {
-        let s = s.replace("{ACCESSION}", &accession);
+        let s = s
+            .replace("{ACCESSION}", &accession)
+            .replace("{TAXON}", &taxon)
+            .replace("{TAXON_ID}", &taxon);
+        cfg.sequence_report.local_path = Some(std::path::PathBuf::from(s));
+    }
+
+    for bed in cfg.bed.bed_configs.iter_mut() {
+        let s = bed.path.to_string_lossy().to_string();
+        let s = s
+            .replace("{ACCESSION}", &accession)
+            .replace("{TAXON}", &taxon)
+            .replace("{TAXON_ID}", &taxon);
+        bed.path = std::path::PathBuf::from(s);
+        if let Some(local_path) = &bed.local_path {
+            let s = local_path.to_string_lossy().to_string();
+            let s = s
+                .replace("{ACCESSION}", &accession)
+                .replace("{TAXON}", &taxon)
+                .replace("{TAXON_ID}", &taxon);
+            bed.local_path = Some(std::path::PathBuf::from(s));
+        }
+    }
+
+    if let Some(algs) = &mut cfg.busco.algs {
+        for alg in algs.iter_mut() {
+            let path = alg.path.to_string_lossy().to_string();
+            alg.path = PathBuf::from(
+                path.replace("{ACCESSION}", &accession)
+                    .replace("{TAXON}", &taxon)
+                    .replace("{TAXON_ID}", &taxon)
+                    .replace("{LINEAGE}", &alg.lineage),
+            );
+            if let Some(local_path) = &alg.local_path {
+                let path = local_path.to_string_lossy().to_string();
+                alg.local_path = Some(PathBuf::from(
+                    path.replace("{ACCESSION}", &accession)
+                        .replace("{TAXON}", &taxon)
+                        .replace("{TAXON_ID}", &taxon)
+                        .replace("{LINEAGE}", &alg.lineage),
+                ));
+            }
+        }
+    }
+
+    expand_busco_tables(cfg);
+
+    let s = cfg
+        .sequence_report
+        .local_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string());
+    if let Some(s) = s {
+        let s = s
+            .replace("{ACCESSION}", &accession)
+            .replace("{TAXON}", &taxon)
+            .replace("{TAXON_ID}", &taxon);
         cfg.sequence_report.local_path = Some(std::path::PathBuf::from(s));
     }
 }
@@ -1040,6 +1139,164 @@ fn attach_rich_window_group_and_transition_metrics_to_attributes(
     }
 }
 
+fn attach_bed_summary_metrics_to_sequences(
+    state: &mut ImportState,
+    bed_cfg: &MultiBedConfig,
+) -> Result<(), error::Error> {
+    let mut sequence_summary_attrs: HashMap<String, Vec<NestedAttribute>> = HashMap::new();
+
+    for bed_config in &bed_cfg.bed_configs {
+        let per_seq_buffers = crate::parse::bed::read_bed_file(bed_config)?;
+        let assembly_stats: Vec<(f64, f64)> = bed_config
+            .value_columns
+            .iter()
+            .enumerate()
+            .map(|(index, column)| {
+                let values: Vec<f64> = per_seq_buffers
+                    .values()
+                    .flat_map(|buffer| buffer.iter())
+                    .flat_map(|feature| feature.values.get(index).copied())
+                    .collect();
+                column
+                    .normalisation
+                    .as_ref()
+                    .map_or((0.0, 0.0), |normalisation| {
+                        crate::parse::bed::normalisation_stats_for_config(&values, normalisation)
+                    })
+            })
+            .collect();
+
+        for (seq_id, buffer) in per_seq_buffers {
+            let values_by_column: Vec<Vec<f64>> = bed_config
+                .value_columns
+                .iter()
+                .enumerate()
+                .map(|(index, column)| {
+                    buffer
+                        .iter()
+                        .flat_map(|feature| feature.values.get(index).copied())
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+
+            let seq_attrs = sequence_summary_attrs.entry(seq_id.clone()).or_default();
+            for (index, column) in bed_config.value_columns.iter().enumerate() {
+                let values = &values_by_column[index];
+                if values.is_empty() {
+                    continue;
+                }
+
+                let primary_summary = column
+                    .summary_functions
+                    .first()
+                    .cloned()
+                    .unwrap_or(crate::parse::bed::SummaryFunction::Mean);
+                let summary_value = primary_summary.compute(values);
+                if summary_value.is_finite() {
+                    seq_attrs.push(NestedAttribute {
+                        key: column.label.clone(),
+                        half_float_value: Some(summary_value as f32),
+                        ..Default::default()
+                    });
+                }
+
+                if let Some(normalisation) = &column.normalisation {
+                    let transformed_key = column
+                        .transformed_name()
+                        .unwrap_or_else(|| format!("{}_zscore", column.label));
+                    let scope_stats = match normalisation.scope {
+                        crate::parse::bed::NormalisationScope::Assembly => {
+                            assembly_stats.get(index).copied().unwrap_or((0.0, 0.0))
+                        }
+                        crate::parse::bed::NormalisationScope::Sequence => {
+                            let seq_values: Vec<f64> = values.clone();
+                            crate::parse::bed::normalisation_stats_for_config(
+                                &seq_values,
+                                normalisation,
+                            )
+                        }
+                    };
+                    let transformed_value = crate::parse::bed::apply_normalisation(
+                        summary_value,
+                        normalisation,
+                        scope_stats,
+                    );
+                    seq_attrs.push(NestedAttribute {
+                        key: transformed_key,
+                        half_float_value: Some(transformed_value as f32),
+                        ..Default::default()
+                    });
+                }
+            }
+        }
+    }
+
+    for (seq_id, attrs) in sequence_summary_attrs {
+        if let Some(seq_doc) = state.sequences.get_mut(&seq_id) {
+            let mut existing = seq_doc.attributes.take().unwrap_or_default();
+            existing.extend(attrs);
+            seq_doc.attributes = Some(existing);
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_bed_sequence_coverage(
+    sequence_features: &HashMap<String, FeatureDocument>,
+    bed_cfg: &MultiBedConfig,
+) -> Result<(), error::Error> {
+    let report_ids: HashSet<_> = sequence_features.keys().cloned().collect();
+    let mut bed_ids = HashSet::new();
+
+    for bed_config in &bed_cfg.bed_configs {
+        let per_seq_buffers = crate::parse::bed::read_bed_file(bed_config)?;
+        for seq_id in per_seq_buffers.keys() {
+            bed_ids.insert(seq_id.clone());
+        }
+    }
+
+    if report_ids.is_empty() || bed_ids.is_empty() {
+        return Ok(());
+    }
+
+    let missing_from_bed: Vec<_> = report_ids.difference(&bed_ids).cloned().collect();
+    let missing_from_report: Vec<_> = bed_ids.difference(&report_ids).cloned().collect();
+
+    if !missing_from_bed.is_empty() || !missing_from_report.is_empty() {
+        let mut details = Vec::new();
+        if !missing_from_bed.is_empty() {
+            details.push(format!(
+                "sequence report IDs missing from BED: {}",
+                missing_from_bed
+                    .iter()
+                    .take(10)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        if !missing_from_report.is_empty() {
+            details.push(format!(
+                "BED IDs missing from sequence report: {}",
+                missing_from_report
+                    .iter()
+                    .take(10)
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        return Err(error::Error::Generic(format!(
+            "BED and sequence report IDs do not match for assembly {}. {}",
+            bed_cfg.accession,
+            details.join("; ")
+        )));
+    }
+
+    Ok(())
+}
+
 fn attach_counts_and_index_sequences(
     state: &mut ImportState,
     es_cfg: &EsConfig,
@@ -1237,9 +1494,15 @@ fn create_attribute_docs_from_features(
     sync_attribute_documents(attribute_docs, state, es_cfg, import_opts)
 }
 
-fn run_single_import_config(mut cfg: ImportConfig) -> Result<(), anyhow::Error> {
+fn run_single_import_config(
+    mut cfg: ImportConfig,
+    staged_cfg: Option<&crate::config::schema::StagedImportConfig>,
+) -> Result<(), anyhow::Error> {
     resolve_assembly_taxon_id(&mut cfg)?;
     expand_placeholders(&mut cfg);
+    if let Some(staged_cfg) = staged_cfg {
+        crate::config::legacy::validate_legacy_runtime_matches_staged(&cfg, staged_cfg)?;
+    }
 
     let assembly_id = cfg.assembly.accession.clone();
     let taxon_id = cfg.assembly.taxon_id.clone().unwrap_or_default();
@@ -1289,8 +1552,12 @@ fn run_single_import_config(mut cfg: ImportConfig) -> Result<(), anyhow::Error> 
     let sequence_features = sequence_report::parse_sequence_report(sequence_report_cfg)?;
     import_state.sequences = sequence_features.clone();
 
+    validate_bed_sequence_coverage(&sequence_features, &cfg.bed)?;
+
     let seq_vec: Vec<_> = import_state.sequences.values().cloned().collect();
     create_attribute_docs_from_features(&seq_vec, &mut import_state, &cfg.es, &cfg.import)?;
+
+    attach_bed_summary_metrics_to_sequences(&mut import_state, &cfg.bed)?;
 
     let window_cfg = cfg.bed.window_specs.clone();
     let busco_cfg = cfg.busco;
@@ -1331,6 +1598,22 @@ pub fn import(options: &crate::cli::ImportOptions) -> Result<(), anyhow::Error> 
     let yaml_text = std::fs::read_to_string(config_path)?;
     let yaml_value: serde_yaml::Value = serde_yaml::from_str(&yaml_text)?;
 
+    let is_staged_config = yaml_value.get("sequence").is_some()
+        || yaml_value.get("windowing").is_some()
+        || yaml_value.get("annotations").is_some();
+
+    if is_staged_config {
+        let mut staged_cfg: crate::config::schema::StagedImportConfig =
+            serde_yaml::from_str(&yaml_text)?;
+        crate::config::legacy::expand_staged_placeholders(&mut staged_cfg);
+        crate::config::legacy::validate_staged_import_config(&staged_cfg)?;
+        let mut cfg = crate::config::legacy::staged_import_config_to_legacy_config(&staged_cfg);
+        resolve_assembly_taxon_id(&mut cfg)?;
+        expand_placeholders(&mut cfg);
+        run_single_import_config(cfg, Some(&staged_cfg))?;
+        return Ok(());
+    }
+
     let is_batch_manifest =
         yaml_value.get("batches").is_some() || yaml_value.get("batches").is_some();
     if is_batch_manifest {
@@ -1370,13 +1653,21 @@ pub fn import(options: &crate::cli::ImportOptions) -> Result<(), anyhow::Error> 
             &options.local_root,
         )?;
         for mut cfg in member_configs {
-            run_single_import_config(cfg)?;
+            resolve_assembly_taxon_id(&mut cfg)?;
+            expand_placeholders(&mut cfg);
+            let staged_cfg = normalize_legacy_import_config(&cfg);
+            crate::config::legacy::validate_staged_import_config(&staged_cfg)?;
+            run_single_import_config(cfg, Some(&staged_cfg))?;
         }
         return Ok(());
     }
 
     let mut cfg: ImportConfig = serde_yaml::from_str(&yaml_text)?;
-    run_single_import_config(cfg)
+    resolve_assembly_taxon_id(&mut cfg)?;
+    expand_placeholders(&mut cfg);
+    let staged_cfg = normalize_legacy_import_config(&cfg);
+    crate::config::legacy::validate_staged_import_config(&staged_cfg)?;
+    run_single_import_config(cfg, Some(&staged_cfg))
 }
 
 #[cfg(test)]
@@ -1386,6 +1677,150 @@ mod tests {
     use crate::index::es::models::nested_documents::NestedAttribute;
     use std::io::{Read, Write};
     use std::net::TcpListener;
+
+    #[test]
+    fn expand_placeholders_replaces_accession_and_lineage_in_config_paths() {
+        let mut cfg = ImportConfig {
+            assembly: AssemblyImportConfig {
+                accession: "GCA_00000001.1".to_string(),
+                taxon_id: Some("1234".to_string()),
+                ancestors: vec![],
+                lineage: vec![],
+            },
+            es: EsConfig {
+                host: "http://localhost".to_string(),
+                port: 9200,
+                username: None,
+                password: None,
+                hub: HubConfig {
+                    name: "goat".to_string(),
+                    release: "2021.10.15".to_string(),
+                    taxonomy: "ncbi".to_string(),
+                },
+            },
+            sequence_report: SequenceReportImportConfig {
+                accession: "GCA_00000001.1".to_string(),
+                taxon_id: "1234".to_string(),
+                ancestors: vec![],
+                path: None,
+                local_path: Some(PathBuf::from("~/tmp/{ACCESSION}.sequence_report.jsonl")),
+            },
+            bed: MultiBedConfig {
+                accession: "GCA_00000001.1".to_string(),
+                taxon_id: "1234".to_string(),
+                ancestors: vec![],
+                lines_per_unit: 1000,
+                window_specs: vec![],
+                bed_configs: vec![crate::parse::bed::BedConfig {
+                    path: PathBuf::from("https://example.org/{ACCESSION}/track.bed.gz"),
+                    local_path: Some(PathBuf::from("~/tmp/{ACCESSION}.track.bed.gz")),
+                    value_columns: vec![],
+                }],
+            },
+            busco: MultiBuscoConfig {
+                accession: "GCA_00000001.1".to_string(),
+                taxon_id: "1234".to_string(),
+                ancestors: vec![],
+                tables: Some(vec![crate::parse::busco::BuscoTableConfig {
+                    path: PathBuf::from("https://example.org/{ACCESSION}/{LINEAGE}/{ACCESSION}.{LINEAGE}.full_table.tsv.gz"),
+                    local_path: Some(PathBuf::from("~/tmp/{ACCESSION}.{LINEAGE}.full_table.tsv.gz")),
+                    lineages: Some(vec!["diptera_odb12".to_string()]),
+                }]),
+                files: None,
+                algs: None,
+            },
+            import: None,
+        };
+
+        expand_placeholders(&mut cfg);
+
+        assert_eq!(
+            cfg.sequence_report.local_path,
+            Some(PathBuf::from("~/tmp/GCA_00000001.1.sequence_report.jsonl"))
+        );
+        assert_eq!(
+            cfg.bed.bed_configs[0].local_path,
+            Some(PathBuf::from("~/tmp/GCA_00000001.1.track.bed.gz"))
+        );
+        assert_eq!(
+            cfg.busco.files.as_ref().unwrap()[0].path,
+            PathBuf::from("https://example.org/GCA_00000001.1/diptera_odb12/GCA_00000001.1.diptera_odb12.full_table.tsv.gz")
+        );
+    }
+
+    #[test]
+    fn expand_placeholders_keeps_existing_busco_files_for_staged_configs() {
+        let mut cfg = ImportConfig {
+            assembly: AssemblyImportConfig {
+                accession: "GCA_00000001.1".to_string(),
+                taxon_id: Some("1234".to_string()),
+                ancestors: vec![],
+                lineage: vec![],
+            },
+            es: EsConfig {
+                host: "http://localhost".to_string(),
+                port: 9200,
+                username: None,
+                password: None,
+                hub: HubConfig {
+                    name: "goat".to_string(),
+                    release: "2021.10.15".to_string(),
+                    taxonomy: "ncbi".to_string(),
+                },
+            },
+            sequence_report: SequenceReportImportConfig {
+                accession: "GCA_00000001.1".to_string(),
+                taxon_id: "1234".to_string(),
+                ancestors: vec![],
+                path: None,
+                local_path: Some(PathBuf::from("~/tmp/{ACCESSION}.sequence_report.jsonl")),
+            },
+            bed: MultiBedConfig {
+                accession: "GCA_00000001.1".to_string(),
+                taxon_id: "1234".to_string(),
+                ancestors: vec![],
+                lines_per_unit: 1000,
+                window_specs: vec![],
+                bed_configs: vec![],
+            },
+            busco: MultiBuscoConfig {
+                accession: "GCA_00000001.1".to_string(),
+                taxon_id: "1234".to_string(),
+                ancestors: vec![],
+                tables: None,
+                files: Some(vec![BuscoFileConfig {
+                    path: PathBuf::from("https://example.org/{ACCESSION}/busco/{LINEAGE}/{ACCESSION}.{LINEAGE}.full_table.tsv.gz"),
+                    local_path: Some(PathBuf::from("~/tmp/{ACCESSION}.{LINEAGE}.full_table.tsv.gz")),
+                    lineage: "diptera_odb12".to_string(),
+                    taxon_id: "1234".to_string(),
+                    accession: "GCA_00000001.1".to_string(),
+                    ancestors: vec![],
+                }]),
+                algs: None,
+            },
+            import: None,
+        };
+
+        expand_placeholders(&mut cfg);
+
+        assert_eq!(
+            cfg.busco.files.as_ref().unwrap().len(),
+            1,
+            "staged BUSCO sources must survive placeholder expansion"
+        );
+        assert_eq!(
+            cfg.busco.files.as_ref().unwrap()[0].path,
+            PathBuf::from(
+                "https://example.org/GCA_00000001.1/busco/diptera_odb12/GCA_00000001.1.diptera_odb12.full_table.tsv.gz"
+            )
+        );
+        assert_eq!(
+            cfg.busco.files.as_ref().unwrap()[0].local_path,
+            Some(PathBuf::from(
+                "~/tmp/GCA_00000001.1.diptera_odb12.full_table.tsv.gz"
+            ))
+        );
+    }
 
     #[test]
     fn resolve_taxon_batch_uses_family_then_order_then_class_then_phylum_fallback() {
@@ -1874,6 +2309,55 @@ busco:
     }
 
     #[test]
+    fn validate_bed_sequence_coverage_rejects_sequence_id_mismatch() {
+        let seq_features = HashMap::from([(
+            "CM000001.1".to_string(),
+            FeatureDocument::new(
+                "CM000001.1".to_string(),
+                None,
+                "chromosome".to_string(),
+                1,
+                1_000_000,
+                Some(1),
+                None,
+                "CM000001.1".to_string(),
+                1_000_000,
+                "asm-1".to_string(),
+                "tax-1".to_string(),
+                None,
+                None,
+                None,
+            ),
+        )]);
+
+        let bed_cfg = MultiBedConfig {
+            accession: "GCA_test".to_string(),
+            taxon_id: "123".to_string(),
+            ancestors: vec![],
+            lines_per_unit: 1000,
+            bed_configs: vec![crate::parse::bed::BedConfig {
+                path: std::path::PathBuf::from("/tmp/mismatch.bed"),
+                local_path: Some(std::path::PathBuf::from("/tmp/mismatch.bed")),
+                value_columns: vec![crate::parse::bed::ValueColumn {
+                    label: "gc".to_string(),
+                    index: 3,
+                    value_type: "float".to_string(),
+                    summary_functions: vec![crate::parse::bed::SummaryFunction::Mean],
+                    normalisation: None,
+                }],
+            }],
+            window_specs: vec![],
+        };
+
+        std::fs::write("/tmp/mismatch.bed", "chr1\t0\t1000\t0.2\n").unwrap();
+
+        let err = validate_bed_sequence_coverage(&seq_features, &bed_cfg).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("BED and sequence report IDs do not match"));
+    }
+
+    #[test]
     fn attach_busco_category_counts_keeps_sequence_counts_from_parse_without_double_counting() {
         let mut state = ImportState::new("asm-1".to_string(), "tax-1".to_string());
 
@@ -2000,6 +2484,7 @@ busco:
             accession: "GCA_test".to_string(),
             taxon_id: "123".to_string(),
             ancestors: vec!["1".to_string(), "2".to_string()],
+            path: None,
             local_path: Some(seq_report_path.clone()),
         })
         .unwrap();

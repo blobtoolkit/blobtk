@@ -35,7 +35,7 @@ pub struct BuscoTableConfig {
     pub lineages: Option<Vec<String>>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct BuscoFileConfig {
     pub path: PathBuf,
     pub local_path: Option<PathBuf>,
@@ -46,7 +46,7 @@ pub struct BuscoFileConfig {
     pub ancestors: Vec<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct AlgConfig {
     pub name: String,
     pub lineage: String,
@@ -56,7 +56,7 @@ pub struct AlgConfig {
     pub mapping: Option<HashMap<String, String>>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Clone, Deserialize, Serialize, Debug, Default)]
 pub struct MultiBuscoConfig {
     pub accession: String,
     #[serde(default)]

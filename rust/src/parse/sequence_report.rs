@@ -11,6 +11,8 @@ use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::paths::resolve_source_path;
+use crate::config::schema::ResolvedPathConfig;
 use crate::error::{self, Error};
 use crate::import::SequenceReportImportConfig;
 use crate::index::es::models::documents::FeatureDocument;
@@ -176,14 +178,17 @@ fn parse_sequence_report_from_json_lines(
     Ok(feature_docs)
 }
 
-/// Wrapper: read local `path` if it exists; otherwise fetch via `datasets`.
-/// If `path` is provided but doesn't exist, fetch and write the file so it's cached.
+/// Resolve sequence report source in the order: local_path -> path -> datasets.
 pub fn parse_sequence_report(
     config: SequenceReportImportConfig,
 ) -> Result<HashMap<String, FeatureDocument>, error::Error> {
-    // If a path is provided and exists, read from it.
-    if let Some(p) = config.local_path {
-        let maybe_sr_file = io::file_reader(p.clone());
+    let resolved = resolve_source_path(&ResolvedPathConfig {
+        path: config.path.clone(),
+        local_path: config.local_path.clone(),
+    });
+
+    if let Ok(resolved_path) = resolved {
+        let maybe_sr_file = io::file_reader(resolved_path.clone());
         if let Ok(mut sr_file) = maybe_sr_file {
             let sr_reader = &mut *sr_file;
             let json_lines: String = sr_reader
@@ -197,9 +202,11 @@ pub fn parse_sequence_report(
                 config.ancestors,
             );
         }
-        // path was provided but not present locally -> fetch and cache
+    }
+
+    if let Some(local_path) = config.local_path {
         let json_lines = fetch_datasets_sequence_report(&config.accession)?;
-        let mut writer = io::get_writer(&Some(p.clone()));
+        let mut writer = io::get_writer(&Some(local_path.clone()));
         writer.write_all(json_lines.as_bytes())?;
         return parse_sequence_report_from_json_lines(
             &json_lines,
@@ -208,7 +215,6 @@ pub fn parse_sequence_report(
         );
     }
 
-    // No path given -> fetch but don't cache
     let json_lines = fetch_datasets_sequence_report(&config.accession)?;
     parse_sequence_report_from_json_lines(&json_lines, config.taxon_id, config.ancestors)
 }

@@ -228,6 +228,43 @@ attributes:
     units: loci
     status: active
     destination: nested
+  distance_to_telomere:
+    display_name: Distance to telomere
+    display_group: summary
+    display_level: 2
+    description: Distance from the window midpoint or boundary to the nearest telomeric sequence end.
+    type: double
+    units: bp
+    source: derived
+    status: active
+    destination: nested
+  window_flags:
+    display_name: Window flags
+    display_group: summary
+    display_level: 2
+    description: Compact list of window-level structural flags, including telomere-validity and internal telomere state.
+    type: keyword
+    source: derived
+    status: active
+    destination: nested
+  nearest_telomere_valid:
+    display_name: Nearest telomere valid
+    display_group: summary
+    display_level: 2
+    description: Whether the nearest chromosome end is a valid telomeric boundary for the window.
+    type: boolean
+    source: derived
+    status: active
+    destination: nested
+  has_internal_telomeres:
+    display_name: Has internal telomeres
+    display_group: summary
+    display_level: 2
+    description: Whether the sequence includes telomeric signal internally, suggesting a recent fusion or structural anomaly.
+    type: boolean
+    source: derived
+    status: active
+    destination: nested
   same_group_continuous:
     display_name: Same-group continuous
     display_group: synteny

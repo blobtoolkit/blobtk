@@ -11,6 +11,7 @@ pub mod blobdir;
 
 /// The BlobTk Command Line Interface.
 pub mod cli;
+pub mod config;
 
 /// Summarise windowed coverage depth.
 pub mod depth;

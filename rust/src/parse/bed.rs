@@ -135,7 +135,7 @@ impl SummaryFunction {
     }
 
     // Optional helper to execute the function directly
-    fn compute(&self, data: &[f64]) -> f64 {
+    pub(crate) fn compute(&self, data: &[f64]) -> f64 {
         (self.get_calculator())(data)
     }
 
@@ -191,6 +191,23 @@ pub enum NormalisationScope {
     #[default]
     Assembly,
     Sequence,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DistanceAnchor {
+    Midpoint,
+    Start,
+    End,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TelomereState {
+    Start,
+    End,
+    Both,
+    None,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -556,7 +573,7 @@ pub fn window_ids_for_midpoint(
         .unwrap_or_default()
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct MultiBedConfig {
     pub accession: String,
     #[serde(default)]
@@ -913,7 +930,10 @@ fn transform_value_for_normalisation(value: f64, config: &NormalisationConfig) -
     }
 }
 
-fn normalisation_stats_for_config(values: &[f64], config: &NormalisationConfig) -> (f64, f64) {
+pub(crate) fn normalisation_stats_for_config(
+    values: &[f64],
+    config: &NormalisationConfig,
+) -> (f64, f64) {
     let transformed_values: Vec<f64> = values
         .iter()
         .map(|value| transform_value_for_normalisation(*value, config))
@@ -926,7 +946,11 @@ fn normalisation_stats_for_config(values: &[f64], config: &NormalisationConfig) 
     }
 }
 
-fn apply_normalisation(value: f64, config: &NormalisationConfig, from: (f64, f64)) -> f64 {
+pub(crate) fn apply_normalisation(
+    value: f64,
+    config: &NormalisationConfig,
+    from: (f64, f64),
+) -> f64 {
     let transformed_value = transform_value_for_normalisation(value, config);
 
     match config.method {
@@ -969,6 +993,100 @@ fn apply_normalisation(value: f64, config: &NormalisationConfig, from: (f64, f64
     }
 }
 
+pub fn distance_to_telomere(
+    sequence_length: usize,
+    start: usize,
+    end: usize,
+    anchor: DistanceAnchor,
+) -> f64 {
+    if sequence_length == 0 {
+        return 0.0;
+    }
+
+    let position = match anchor {
+        DistanceAnchor::Midpoint => (start + end) as f64 / 2.0,
+        DistanceAnchor::Start => start as f64,
+        DistanceAnchor::End => end as f64,
+    };
+
+    let start_distance = position;
+    let end_distance = (sequence_length as f64 - position).abs();
+    start_distance.min(end_distance)
+}
+
+pub fn telomere_state_for_sequence(
+    sequence_length: usize,
+    has_start_telomere: bool,
+    has_end_telomere: bool,
+) -> TelomereState {
+    if sequence_length == 0 {
+        return TelomereState::None;
+    }
+
+    match (has_start_telomere, has_end_telomere) {
+        (true, true) => TelomereState::Both,
+        (true, false) => TelomereState::Start,
+        (false, true) => TelomereState::End,
+        (false, false) => TelomereState::None,
+    }
+}
+
+pub fn nearest_telomere_valid(
+    sequence_length: usize,
+    start: usize,
+    end: usize,
+    anchor: DistanceAnchor,
+    has_start_telomere: bool,
+    has_end_telomere: bool,
+) -> bool {
+    if !has_start_telomere && !has_end_telomere {
+        return false;
+    }
+
+    let position = match anchor {
+        DistanceAnchor::Midpoint => (start + end) as f64 / 2.0,
+        DistanceAnchor::Start => start as f64,
+        DistanceAnchor::End => end as f64,
+    };
+
+    let start_distance = position;
+    let end_distance = (sequence_length as f64 - position).abs();
+    let nearest_is_start = start_distance <= end_distance;
+
+    match (has_start_telomere, has_end_telomere) {
+        (true, true) => true,
+        (true, false) => nearest_is_start,
+        (false, true) => !nearest_is_start,
+        (false, false) => false,
+    }
+}
+
+pub fn window_flags_for_telomere(
+    sequence_length: usize,
+    start: usize,
+    end: usize,
+    anchor: DistanceAnchor,
+    has_start_telomere: bool,
+    has_end_telomere: bool,
+    has_internal_telomeres: bool,
+) -> Vec<String> {
+    let mut flags = Vec::new();
+    if nearest_telomere_valid(
+        sequence_length,
+        start,
+        end,
+        anchor,
+        has_start_telomere,
+        has_end_telomere,
+    ) {
+        flags.push("nearest_telomere_valid".to_string());
+    }
+    if has_internal_telomeres {
+        flags.push("has_internal_telomeres".to_string());
+    }
+    flags
+}
+
 pub fn parse_bed_files(
     config: &MultiBedConfig,
 ) -> Result<HashMap<String, FeatureDocument>, error::Error> {
@@ -995,8 +1113,32 @@ pub fn parse_bed_files(
                 })
                 .collect();
 
+            let sequence_stats: HashMap<String, Vec<(f64, f64)>> = per_seq_buffers
+                .iter()
+                .map(|(seq_id, buffer)| {
+                    let stats = bed_config
+                        .value_columns
+                        .iter()
+                        .enumerate()
+                        .map(|(index, column)| {
+                            let values: Vec<f64> = buffer
+                                .iter()
+                                .flat_map(|feature| feature.values.get(index).copied())
+                                .collect();
+                            column
+                                .normalisation
+                                .as_ref()
+                                .map_or((0.0, 0.0), |normalisation| {
+                                    normalisation_stats_for_config(&values, normalisation)
+                                })
+                        })
+                        .collect();
+                    (seq_id.clone(), stats)
+                })
+                .collect();
+
             for (seq_id, buffer) in per_seq_buffers {
-                let sequence_length = buffer.last().map_or(0, |f| f.end);
+                let sequence_length = buffer.iter().map(|feature| feature.end).max().unwrap_or(0);
                 for window_spec in config.window_specs.iter() {
                     let bounds = window_bounds_for_sequence(
                         sequence_length,
@@ -1086,10 +1228,19 @@ pub fn parse_bed_files(
                                                 bed_config.value_columns[index].label
                                             )
                                         });
+                                    let scope_stats = match normalisation.scope {
+                                        NormalisationScope::Assembly => {
+                                            assembly_stats.get(index).copied().unwrap_or((0.0, 0.0))
+                                        }
+                                        NormalisationScope::Sequence => sequence_stats
+                                            .get(&seq_id)
+                                            .and_then(|stats| stats.get(index).copied())
+                                            .unwrap_or((0.0, 0.0)),
+                                    };
                                     let transformed_value = apply_normalisation(
                                         summary_value,
                                         normalisation,
-                                        assembly_stats[index],
+                                        scope_stats,
                                     );
                                     if doc.attributes.is_none() {
                                         doc.attributes = Some(vec![]);
@@ -1103,7 +1254,37 @@ pub fn parse_bed_files(
                             }
                         }
 
+                        let distance_to_telomere_value = distance_to_telomere(
+                            sequence_length,
+                            window_start,
+                            window_end,
+                            DistanceAnchor::Midpoint,
+                        );
+                        let window_flags = window_flags_for_telomere(
+                            sequence_length,
+                            window_start,
+                            window_end,
+                            DistanceAnchor::Midpoint,
+                            window_start == 0,
+                            window_end >= sequence_length,
+                            false,
+                        );
+
                         let attributes = doc.attributes.as_mut().unwrap();
+                        attributes.push(NestedAttribute {
+                            key: "distance_to_telomere".to_string(),
+                            double_value: Some(distance_to_telomere_value as f64),
+                            ..Default::default()
+                        });
+                        if !window_flags.is_empty() {
+                            attributes.push(NestedAttribute {
+                                key: "window_flags".to_string(),
+                                keyword_value: Some(super::genomehubs::StringOrVec::Multiple(
+                                    window_flags,
+                                )),
+                                ..Default::default()
+                            });
+                        }
                         attributes.push(NestedAttribute {
                             key: "assembly_id".to_string(),
                             keyword_value: Some(super::genomehubs::StringOrVec::Single(
@@ -1210,6 +1391,52 @@ mod tests {
     }
 
     #[test]
+    fn test_distance_to_telomere_uses_nearest_boundary() {
+        assert!((distance_to_telomere(100, 40, 60, DistanceAnchor::Midpoint) - 50.0).abs() < 1e-9);
+        assert!((distance_to_telomere(100, 0, 10, DistanceAnchor::Midpoint) - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_window_flags_for_telomere_state() {
+        let flags =
+            window_flags_for_telomere(100, 0, 10, DistanceAnchor::Midpoint, true, false, false);
+        assert_eq!(flags, vec!["nearest_telomere_valid".to_string()]);
+
+        let flags =
+            window_flags_for_telomere(100, 40, 60, DistanceAnchor::Midpoint, true, true, true);
+        assert!(flags.contains(&"nearest_telomere_valid".to_string()));
+        assert!(flags.contains(&"has_internal_telomeres".to_string()));
+    }
+
+    #[test]
+    fn test_nearest_telomere_valid_for_single_telomere_chromosome() {
+        assert!(nearest_telomere_valid(
+            100,
+            0,
+            10,
+            DistanceAnchor::Midpoint,
+            true,
+            false,
+        ));
+        assert!(!nearest_telomere_valid(
+            100,
+            80,
+            90,
+            DistanceAnchor::Midpoint,
+            true,
+            false,
+        ));
+        assert!(nearest_telomere_valid(
+            100,
+            90,
+            100,
+            DistanceAnchor::Midpoint,
+            false,
+            true,
+        ));
+    }
+
+    #[test]
     fn test_assembly_local_log2_fold_change_normalisation() {
         let config = NormalisationConfig {
             method: NormalisationMethod::Log2FoldChange,
@@ -1284,6 +1511,93 @@ mod tests {
     }
 
     // temporary test for parse_bed_files function
+    #[test]
+    fn test_parse_bed_files_uses_max_end_for_sequence_length() {
+        let tmp = std::env::temp_dir().join("blobtk_bed_sequence_length_regression.bed");
+        std::fs::write(
+            &tmp,
+            "chr1\t7000\t8000\t0.1\nchr1\t0\t5000\t0.2\nchr1\t5000\t7000\t0.3\nchr2\t0\t12000\t0.4\n",
+        )
+        .unwrap();
+
+        let cfg = MultiBedConfig {
+            accession: "GCA_test".to_string(),
+            taxon_id: "123".to_string(),
+            ancestors: vec!["1".to_string(), "2".to_string()],
+            lines_per_unit: 1000,
+            bed_configs: vec![BedConfig {
+                path: tmp,
+                local_path: None,
+                value_columns: vec![ValueColumn {
+                    label: "gc".to_string(),
+                    index: 3,
+                    value_type: "float".to_string(),
+                    summary_functions: vec![SummaryFunction::Mean],
+                    normalisation: None,
+                }],
+            }],
+            window_specs: vec![WindowSpec::Size {
+                size: 5000,
+                remnant_policy: RemnantPolicy::Trailing,
+            }],
+        };
+
+        let docs = parse_bed_files(&cfg).unwrap();
+        assert!(docs.keys().any(|id| id.contains("chr1:0-5000:win-5k")));
+        assert!(docs.keys().any(|id| id.contains("chr1:5000-8000:win-5k")));
+        assert!(!docs.keys().any(|id| id.contains("chr1:7000-8000:win-5k")));
+    }
+
+    #[test]
+    fn test_parse_bed_files_respects_sequence_scoped_normalisation() {
+        let tmp = std::env::temp_dir().join("blobtk_bed_sequence_scope_regression.bed");
+        std::fs::write(
+            &tmp,
+            "chr1\t0\t1000\t0.2\nchr1\t1000\t2000\t0.8\nchr1\t2000\t3000\t0.6\n",
+        )
+        .unwrap();
+
+        let cfg = MultiBedConfig {
+            accession: "GCA_test".to_string(),
+            taxon_id: "123".to_string(),
+            ancestors: vec!["1".to_string(), "2".to_string()],
+            lines_per_unit: 1000,
+            bed_configs: vec![BedConfig {
+                path: tmp,
+                local_path: None,
+                value_columns: vec![ValueColumn {
+                    label: "gc".to_string(),
+                    index: 3,
+                    value_type: "float".to_string(),
+                    summary_functions: vec![SummaryFunction::Mean],
+                    normalisation: Some(NormalisationConfig {
+                        method: NormalisationMethod::Zscore,
+                        statistic: NormalisationStatistic::MeanStd,
+                        scope: NormalisationScope::Sequence,
+                    }),
+                }],
+            }],
+            window_specs: vec![WindowSpec::Size {
+                size: 3000,
+                remnant_policy: RemnantPolicy::Trailing,
+            }],
+        };
+
+        let docs = parse_bed_files(&cfg).unwrap();
+        let window = docs
+            .values()
+            .find(|doc| doc.sequence_id == "chr1" && doc.primary_type.starts_with("win"))
+            .expect("sequence-scoped normalisation should create a window for chr1");
+        let attr = window
+            .attributes
+            .as_ref()
+            .expect("window should retain transformed attribute")
+            .iter()
+            .find(|attr| attr.key == "gc_zscore")
+            .expect("sequence-scoped z-score should be attached");
+        assert!(!attr.half_float_value.unwrap().is_nan());
+    }
+
     #[test]
     fn test_parse_bed_files_creates_final_partial_window() {
         let tmp = std::env::temp_dir().join("blobtk_bed_window_regression.bed");
@@ -1410,6 +1724,51 @@ mod tests {
         assert!(
             has_window_feature_type,
             "window primary type must also appear in feature_type metadata"
+        );
+    }
+
+    #[test]
+    fn test_parse_bed_files_uses_double_for_distance_to_telomere() {
+        let tmp = std::env::temp_dir().join("blobtk_bed_distance_to_telomere_double.bed");
+        std::fs::write(&tmp, "chr1\t0\t1000\t0.1\nchr1\t1000\t2000\t0.2\n").unwrap();
+
+        let cfg = MultiBedConfig {
+            accession: "GCA_test".to_string(),
+            taxon_id: "123".to_string(),
+            ancestors: vec!["1".to_string(), "2".to_string()],
+            lines_per_unit: 1000,
+            bed_configs: vec![BedConfig {
+                path: tmp,
+                local_path: None,
+                value_columns: vec![ValueColumn {
+                    label: "gc".to_string(),
+                    index: 3,
+                    value_type: "float".to_string(),
+                    summary_functions: vec![SummaryFunction::Mean],
+                    normalisation: None,
+                }],
+            }],
+            window_specs: vec![WindowSpec::Size {
+                size: 2000,
+                remnant_policy: RemnantPolicy::Trailing,
+            }],
+        };
+
+        let docs = parse_bed_files(&cfg).unwrap();
+        let window = docs
+            .values()
+            .find(|doc| doc.primary_type.starts_with("win"))
+            .expect("window docs should be created from BED input");
+
+        let has_double_distance = window
+            .attributes
+            .as_ref()
+            .unwrap()
+            .iter()
+            .any(|attr| attr.key == "distance_to_telomere" && attr.double_value.is_some());
+        assert!(
+            has_double_distance,
+            "distance_to_telomere must be stored as a double to match the registry and histogram contracts"
         );
     }
 
